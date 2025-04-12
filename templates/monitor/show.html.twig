@@ -1,0 +1,345 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ monitor.name }} - CronitorClone{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <h1 class="h3 mb-0">{{ monitor.name }}</h1>
+        <div>
+            <a href="{{ app_url }}/" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-arrow-left me-1"></i> Back
+            </a>
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-primary">Alerts On</button>
+                <button type="button" class="btn btn-outline-secondary">Edit</button>
+                <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown">
+                    <span class="visually-hidden">Toggle Dropdown</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#">More Actions</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <p class="text-muted">Runs at 08:00 Europe/Warsaw • Next in about 10 hours</p>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="row g-0">
+                    <div class="col-md-2 p-3 text-center border-end">
+                        <div class="status-badge status-healthy mb-2">Healthy</div>
+                        <div class="text-muted">Just Now</div>
+                    </div>
+                    <div class="col-md-2 p-3 text-center border-end">
+                        <div class="fw-bold mb-1">{{ stats.success_rate|round(1) }}%</div>
+                        <div class="text-muted">7 Days</div>
+                    </div>
+                    <div class="col-md-2 p-3 text-center border-end">
+                        <div class="fw-bold mb-1">{{ stats.avg_duration ? stats.avg_duration|round(0) ~ ' ms' : '-' }}</div>
+                        <div class="text-muted">7 Days</div>
+                    </div>
+                    <div class="col-md-2 p-3 text-center border-end">
+                        <div class="fw-bold mb-1">{{ completedPings|length }}</div>
+                        <div class="text-muted">7 Days</div>
+                    </div>
+                    <div class="col-md-2 p-3 text-center border-end">
+                        <div class="fw-bold mb-1">{{ stats.failed ?: 'None' }}</div>
+                        <div class="text-muted">7 Days</div>
+                    </div>
+                    <div class="col-md-2 p-3 text-center">
+                        <a href="{{ app_url }}/monitors/{{ monitor.id }}?days=30" class="btn btn-sm {% if days == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %} me-1">30d</a>
+                        <a href="{{ app_url }}/monitors/{{ monitor.id }}?days=7" class="btn btn-sm {% if days == 7 %}btn-primary{% else %}btn-outline-secondary{% endif %}">7d</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0">Execution Time</h5>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary active">7 Days</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="executionChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0">Events</h5>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary active">7 Days</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="eventsChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Latest Activity</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>Host</th>
+                                <th>Performance</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ping in completedPings|slice(0, 10) %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-arrow-repeat text-secondary me-2"></i>
+                                        <div>
+                                            <div>Execution</div>
+                                            <div class="text-muted small">{{ ping.timestamp|date('m/d/Y, h:i:s a') }} UTC</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ ping.host }}</td>
+                                <td>{{ ping.duration ? ping.duration|round(0) ~ ' ms' : '-' }}</td>
+                                <td>
+                                    <span class="badge {{ ping.state == 'complete' ? 'bg-success' : 'bg-danger' }}">
+                                        {{ ping.state|capitalize }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div>Showing 1 to {{ completedPings|length }} of {{ completedPings|length }} results</div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary disabled">Previous</button>
+                        <button class="btn btn-sm btn-outline-secondary ms-2">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Latest Issues</h5>
+            </div>
+            <div class="card-body">
+                {% set failedPings = completedPings|filter(ping => ping.state == 'fail') %}
+                {% if failedPings|length > 0 %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ping in failedPings|slice(0, 5) %}
+                            <tr>
+                                <td>{{ ping.unique_id }}</td>
+                                <td>{{ ping.error ?: 'No error message available' }}</td>
+                                <td>
+                                    <span class="badge bg-danger">Failed</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    No Issues Detected.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Monitor Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="text-muted">Type</div>
+                    <div>
+                        <i class="bi bi-hdd-stack me-1"></i>
+                        Job
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted">Key</div>
+                    <div>#{{ monitor.id }}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted">Schedule</div>
+                    <div>Every 8 hours</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted">Runs at</div>
+                    <div>08:00 Europe/Warsaw</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted">Platform</div>
+                    <div>Linux cron</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted">Server Timezone</div>
+                    <div>Europe/Warsaw</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Assertions</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-secondary">
+                    <i class="bi bi-stopwatch me-2"></i>
+                    metric: duration < 5 seconds
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Failure Tolerance</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-muted">None</div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Grace Period</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-muted">1 minute</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Execution Time Chart
+        const executionData = {{ executionTimes|json_encode()|raw }};
+        const executionLabels = executionData.map(item => {
+            const date = new Date(item.hour);
+            return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' });
+        });
+        const executionValues = executionData.map(item => item.duration);
+        
+        const executionCtx = document.getElementById('executionChart').getContext('2d');
+        new Chart(executionCtx, {
+            type: 'line',
+            data: {
+                labels: executionLabels,
+                datasets: [{
+                    label: 'Execution Time (ms)',
+                    data: executionValues,
+                    backgroundColor: 'rgba(103, 58, 183, 0.2)',
+                    borderColor: 'rgba(103, 58, 183, 1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Duration (ms)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Events Chart
+        const eventsData = {{ events|json_encode()|raw }};
+        const eventsCtx = document.getElementById('eventsChart').getContext('2d');
+        
+        const eventsDates = eventsData.map(item => item.date);
+        new Chart(eventsCtx, {
+            type: 'bar',
+            data: {
+                labels: eventsDates,
+                datasets: [{
+                    label: 'Event Count',
+                    data: eventsData.map(item => item.executions.length),
+                    backgroundColor: 'rgba(76, 175, 80, 0.8)',
+                    borderColor: 'rgba(76, 175, 80, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

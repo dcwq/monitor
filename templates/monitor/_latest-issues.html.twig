@@ -1,0 +1,36 @@
+{% if pings|length > 0 %}
+<div class="table-responsive">
+    <table class="table table-hover mb-0">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>State</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ping in pings %}
+            <tr>
+                <td>{{ ping.unique_id }}</td>
+                <td>{{ ping.error ?: 'No error message available' }}</td>
+                <td>
+                    <span class="badge bg-danger">Failed</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div class="card-footer d-flex justify-content-between align-items-center">
+    <div>Showing 1 to {{ pings|length }} of {{ pings|length }} results</div>
+    <div>
+        <button class="btn btn-sm btn-outline-secondary disabled">Previous</button>
+        <button class="btn btn-sm btn-outline-secondary ms-2 disabled">Next</button>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-success">
+    <i class="bi bi-check-circle-fill me-2"></i>
+    No Issues Detected.
+</div>
+{% endif %}

@@ -1,0 +1,11 @@
+DB_HOST=localhost
+DB_NAME=cronitor_clone
+DB_USER=root
+DB_PASS=
+
+LOG_DIR=logs
+HISTORY_LOG=logs/cronitor-history.log
+TAGS_INDEX=logs/cronitor-tags-index.json
+API_LOG=logs/api.log
+
+APP_URL=http://localhost

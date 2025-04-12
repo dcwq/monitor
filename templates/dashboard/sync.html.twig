@@ -1,0 +1,31 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Sync Logs - CronitorClone{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Sync Logs</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        Successfully imported {{ totalImportCount }} new log entries.
+                    </div>
+
+                    <div class="mb-3">
+                        <h6>Import Details:</h6>
+                        <ul>
+                            <li>History log: {{ historyImportCount }} entries</li>
+                            <li>API log: {{ apiImportCount }} entries</li>
+                        </ul>
+                    </div>
+
+                    <a href="{{ app_url }}/" class="btn btn-primary">Return to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,41 @@
+<div class="table-responsive">
+    <table class="table table-hover mb-0">
+        <thead>
+            <tr>
+                <th>Event</th>
+                <th>Host</th>
+                <th>Performance</th>
+                <th>State</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ping in pings %}
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-arrow-repeat text-secondary me-2"></i>
+                        <div>
+                            <div>Execution</div>
+                            <div class="text-muted small">{{ ping.timestamp|date('m/d/Y, h:i:s a') }} UTC</div>
+                        </div>
+                    </div>
+                </td>
+                <td>{{ ping.host }}</td>
+                <td>{{ ping.duration ? ping.duration|round(0) ~ ' ms' : '-' }}</td>
+                <td>
+                    <span class="badge {{ ping.state == 'complete' ? 'bg-success' : (ping.state == 'run' ? 'bg-primary' : 'bg-danger') }}">
+                        {{ ping.state|capitalize }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div class="card-footer d-flex justify-content-between align-items-center">
+    <div>Showing 1 to {{ pings|length }} of {{ pings|length }} results</div>
+    <div>
+        <button class="btn btn-sm btn-outline-secondary disabled">Previous</button>
+        <button class="btn btn-sm btn-outline-secondary ms-2 disabled">Next</button>
+    </div>
+</div>
