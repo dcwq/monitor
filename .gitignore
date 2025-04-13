@@ -2,3 +2,6 @@
 .idea
 vendor
 data/logs/*
+mysql/*
+docker/web/.ssh/*
+!docker/web/.ssh/.gitkeep
