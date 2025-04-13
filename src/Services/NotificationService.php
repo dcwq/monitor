@@ -3,45 +3,63 @@
 
 namespace App\Services;
 
-use App\Connection;
-use App\Models\Monitor;
-use App\Models\MonitorConfig;
-use App\Models\MonitorOverdueHistory;
+use App\Entity\Monitor;
+use App\Entity\MonitorOverdueHistory;
+use App\Enum\NotificationEventType;
 use App\Notifications\NotificationAdapterFactory;
-use PDO;
+use App\Repository\MonitorConfigRepositoryInterface;
+use App\Repository\MonitorOverdueHistoryRepositoryInterface;
+use App\Repository\MonitorRepositoryInterface;
 use DateTime;
+use Doctrine\DBAL\Connection;
 
 class NotificationService
 {
+    private Connection $connection;
+    private MonitorRepositoryInterface $monitorRepository;
+    private MonitorConfigRepositoryInterface $monitorConfigRepository;
+    private MonitorOverdueHistoryRepositoryInterface $overdueHistoryRepository;
+
+    public function __construct(
+        Connection $connection,
+        MonitorRepositoryInterface $monitorRepository,
+        MonitorConfigRepositoryInterface $monitorConfigRepository,
+        MonitorOverdueHistoryRepositoryInterface $overdueHistoryRepository
+    ) {
+        $this->connection = $connection;
+        $this->monitorRepository = $monitorRepository;
+        $this->monitorConfigRepository = $monitorConfigRepository;
+        $this->overdueHistoryRepository = $overdueHistoryRepository;
+    }
+
     /**
      * Send notification for a monitor
      *
      * @param int $monitorId Monitor ID
-     * @param string $eventType Event type: 'fail', 'overdue', 'resolve'
+     * @param NotificationEventType $eventType Event type: 'fail', 'overdue', 'resolve'
      * @param string $message Message to send
      * @return array Array of notification results with channel IDs
      */
-    public function sendNotifications(int $monitorId, string $eventType, string $message): array
+    public function sendNotifications(int $monitorId, NotificationEventType $eventType, string $message): array
     {
-        $db = Connection::getInstance();
-
-        // Pobierz konfiguracje kanałów dla tego monitora
-        $stmt = $db->prepare('
+        // Get channel configurations for this monitor
+        $stmt = $this->connection->prepare('
             SELECT nc.id, nc.name, nc.type, nc.config, mn.notify_on_fail, mn.notify_on_overdue, mn.notify_on_resolve 
             FROM notification_channels nc
             JOIN monitor_notifications mn ON nc.id = mn.channel_id
             WHERE mn.monitor_id = :monitor_id
         ');
-        $stmt->execute(['monitor_id' => $monitorId]);
+        $resultSet = $stmt->executeQuery(['monitor_id' => $monitorId]);
+        $channels = $resultSet->fetchAllAssociative();
 
         $results = [];
 
-        while ($channel = $stmt->fetch()) {
-            // Sprawdź czy ten kanał ma być powiadamiany o tym typie zdarzenia
+        foreach ($channels as $channel) {
+            // Check if this channel should be notified for this event type
             if (
-                ($eventType === 'fail' && !$channel['notify_on_fail']) ||
-                ($eventType === 'overdue' && !$channel['notify_on_overdue']) ||
-                ($eventType === 'resolve' && !$channel['notify_on_resolve'])
+                ($eventType === NotificationEventType::FAIL && !$channel['notify_on_fail']) ||
+                ($eventType === NotificationEventType::OVERDUE && !$channel['notify_on_overdue']) ||
+                ($eventType === NotificationEventType::RESOLVE && !$channel['notify_on_resolve'])
             ) {
                 continue;
             }
@@ -57,9 +75,9 @@ class NotificationService
                 $adapter = NotificationAdapterFactory::create($channel['type']);
                 $success = $adapter->send($message, $config);
 
-                // Zapisz historię powiadomienia
+                // Log notification history
                 if ($success) {
-                    $this->logNotification($monitorId, $channel['id'], $eventType, $message);
+                    $this->logNotification($monitorId, $channel['id'], $eventType->value, $message);
                 }
 
                 $results[$channel['id']] = $success;
@@ -77,13 +95,12 @@ class NotificationService
      */
     private function logNotification(int $monitorId, int $channelId, string $eventType, string $message): void
     {
-        $db = Connection::getInstance();
-        $stmt = $db->prepare('
+        $stmt = $this->connection->prepare('
             INSERT INTO notification_history 
             (monitor_id, channel_id, event_type, message) 
             VALUES (:monitor_id, :channel_id, :event_type, :message)
         ');
-        $stmt->execute([
+        $stmt->executeStatement([
             'monitor_id' => $monitorId,
             'channel_id' => $channelId,
             'event_type' => $eventType,
@@ -98,70 +115,67 @@ class NotificationService
      */
     public function checkOverdueMonitors(): int
     {
-        $db = Connection::getInstance();
         $now = time();
         $notificationCount = 0;
 
-        // Pobierz wszystkie monitory
-        $monitors = Monitor::findAll();
+        // Get all monitors
+        $monitors = $this->monitorRepository->findAll();
 
         foreach ($monitors as $monitor) {
-            // Pobierz ostatni ping dla monitora
+            // Get last ping for monitor
             $lastPing = $monitor->getLastPing();
             if (!$lastPing) {
-                continue; // Brak pingów, nie możemy określić czy jest opóźniony
+                continue; // No pings, can't determine if overdue
             }
 
-            // Pobierz konfigurację monitora lub utwórz domyślną
-            $config = MonitorConfig::getOrCreate($monitor->id);
+            // Get monitor configuration or create default
+            $config = $this->monitorConfigRepository->getOrCreate($monitor);
 
-            // Jeśli nie mamy ustawionego interwału, przejdź do następnego monitora
-            if ($config->expected_interval <= 0) {
+            // If no interval set, skip to next monitor
+            if ($config->getExpectedInterval() <= 0) {
                 continue;
             }
 
-            // Oblicz kiedy spodziewamy się następnego pinga
-            $expectedNextTime = $lastPing->timestamp + $config->expected_interval;
+            // Calculate when we expect the next ping
+            $expectedNextTime = $lastPing->getTimestamp() + $config->getExpectedInterval();
 
-            // Jeśli czas oczekiwania już minął i upłynął czas progu alertu
-            if ($now > $expectedNextTime + $config->alert_threshold) {
-                // Sprawdź czy już istnieje nierozwiązany rekord overdue dla tego monitora
-                $existingOverdue = MonitorOverdueHistory::findUnresolvedByMonitorId($monitor->id);
+            // If expected time has passed and alert threshold time has also passed
+            if ($now > $expectedNextTime + $config->getAlertThreshold()) {
+                // Check if there's already an unresolved overdue record for this monitor
+                $existingOverdue = $this->overdueHistoryRepository->findUnresolvedByMonitor($monitor);
 
                 if (!$existingOverdue) {
-                    // Utwórz nowy rekord historii overdue
+                    // Create new overdue history record
                     $overdueTime = new DateTime('@' . $expectedNextTime);
-                    $overdueHistory = new MonitorOverdueHistory(
-                        $monitor->id,
-                        $overdueTime->format('Y-m-d H:i:s')
-                    );
-                    $overdueHistory->save();
+                    $overdueHistory = new MonitorOverdueHistory($monitor, $overdueTime);
+                    $this->overdueHistoryRepository->save($overdueHistory);
 
-                    // Przygotuj i wyślij powiadomienie
+                    // Prepare and send notification
                     $minutesLate = floor(($now - $expectedNextTime) / 60);
-                    $message = "Monitor '{$monitor->name}' is overdue by {$minutesLate} minutes.";
-                    if ($monitor->project_name) {
-                        $message .= " Project: {$monitor->project_name}";
+                    $message = "Monitor '{$monitor->getName()}' is overdue by {$minutesLate} minutes.";
+                    if ($monitor->getProjectName()) {
+                        $message .= " Project: {$monitor->getProjectName()}";
                     }
 
-                    $this->sendNotifications($monitor->id, 'overdue', $message);
+                    $this->sendNotifications($monitor->getId(), NotificationEventType::OVERDUE, $message);
                     $notificationCount++;
                 }
-            } else if ($now <= $expectedNextTime && $lastPing->state !== 'fail') {
-                // Jeśli monitor działa w czasie, sprawdź czy nie ma nierozwiązanych zdarzeń overdue
-                $existingOverdue = MonitorOverdueHistory::findUnresolvedByMonitorId($monitor->id);
+            } else if ($now <= $expectedNextTime && $lastPing->getState() !== 'fail') {
+                // If monitor is on time, check for unresolved overdue events
+                $existingOverdue = $this->overdueHistoryRepository->findUnresolvedByMonitor($monitor);
 
                 if ($existingOverdue) {
-                    // Rozwiąż zdarzenie overdue
+                    // Resolve the overdue event
                     $existingOverdue->resolve();
+                    $this->overdueHistoryRepository->save($existingOverdue);
 
-                    // Wyślij powiadomienie o rozwiązaniu
-                    $message = "Monitor '{$monitor->name}' is now back on schedule.";
-                    if ($monitor->project_name) {
-                        $message .= " Project: {$monitor->project_name}";
+                    // Send resolution notification
+                    $message = "Monitor '{$monitor->getName()}' is now back on schedule.";
+                    if ($monitor->getProjectName()) {
+                        $message .= " Project: {$monitor->getProjectName()}";
                     }
 
-                    $this->sendNotifications($monitor->id, 'resolve', $message);
+                    $this->sendNotifications($monitor->getId(), NotificationEventType::RESOLVE, $message);
                     $notificationCount++;
                 }
             }
@@ -179,21 +193,21 @@ class NotificationService
      */
     public function handleMonitorFail(int $monitorId, string $errorMessage): bool
     {
-        $monitor = Monitor::findById($monitorId);
+        $monitor = $this->monitorRepository->findById($monitorId);
         if (!$monitor) {
             return false;
         }
 
-        $message = "Monitor '{$monitor->name}' has failed";
-        if ($monitor->project_name) {
-            $message .= " (Project: {$monitor->project_name})";
+        $message = "Monitor '{$monitor->getName()}' has failed";
+        if ($monitor->getProjectName()) {
+            $message .= " (Project: {$monitor->getProjectName()})";
         }
 
         if ($errorMessage) {
             $message .= ": $errorMessage";
         }
 
-        $results = $this->sendNotifications($monitorId, 'fail', $message);
+        $results = $this->sendNotifications($monitorId, NotificationEventType::FAIL, $message);
         return !empty(array_filter($results));
     }
 
@@ -205,17 +219,17 @@ class NotificationService
      */
     public function handleMonitorResolve(int $monitorId): bool
     {
-        $monitor = Monitor::findById($monitorId);
+        $monitor = $this->monitorRepository->findById($monitorId);
         if (!$monitor) {
             return false;
         }
 
-        $message = "Monitor '{$monitor->name}' is now working properly";
-        if ($monitor->project_name) {
-            $message .= " (Project: {$monitor->project_name})";
+        $message = "Monitor '{$monitor->getName()}' is now working properly";
+        if ($monitor->getProjectName()) {
+            $message .= " (Project: {$monitor->getProjectName()})";
         }
 
-        $results = $this->sendNotifications($monitorId, 'resolve', $message);
+        $results = $this->sendNotifications($monitorId, NotificationEventType::RESOLVE, $message);
         return !empty(array_filter($results));
     }
 }

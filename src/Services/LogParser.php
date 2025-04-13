@@ -2,17 +2,31 @@
 
 namespace App\Services;
 
-use App\Models\Monitor;
-use App\Models\Ping;
-use App\Models\Tag;
+use App\Entity\Monitor;
+use App\Entity\Ping;
+use App\Entity\Tag;
+use App\Enum\PingState;
+use App\Repository\MonitorRepositoryInterface;
+use App\Repository\PingRepositoryInterface;
+use App\Repository\TagRepositoryInterface;
 
 class LogParser
 {
     private string $historyLogPath;
     private ?string $lastProcessedLine = null;
+    private MonitorRepositoryInterface $monitorRepository;
+    private PingRepositoryInterface $pingRepository;
+    private TagRepositoryInterface $tagRepository;
 
-    public function __construct(string $historyLogPath = null)
-    {
+    public function __construct(
+        MonitorRepositoryInterface $monitorRepository,
+        PingRepositoryInterface $pingRepository,
+        TagRepositoryInterface $tagRepository,
+        string $historyLogPath = null
+    ) {
+        $this->monitorRepository = $monitorRepository;
+        $this->pingRepository = $pingRepository;
+        $this->tagRepository = $tagRepository;
         $this->historyLogPath = $historyLogPath ?? $_ENV['HISTORY_LOG'];
     }
 
@@ -66,44 +80,47 @@ class LogParser
         $monitorName = $pingData['monitor'];
         $projectName = $pingData['project'] ?? null;
 
-        $monitor = Monitor::findByName($monitorName);
+        // Find or create monitor
+        $monitor = $this->monitorRepository->findByName($monitorName);
         if ($monitor === null) {
             $monitor = new Monitor($monitorName, $projectName);
-            $monitor->save();
-        } else if ($projectName && $monitor->project_name !== $projectName) {
-            // Aktualizuj nazwę projektu, jeśli się zmieniła
-            $monitor->project_name = $projectName;
-            $monitor->save();
+            $this->monitorRepository->save($monitor);
+        } else if ($projectName && $monitor->getProjectName() !== $projectName) {
+            // Update project name if it has changed
+            $monitor->setProjectName($projectName);
+            $this->monitorRepository->save($monitor);
         }
 
+        // Create ping entity
         $ping = new Ping();
-        $ping->monitor_id = $monitor->id;
-        $ping->unique_id = $pingData['unique_id'] ?? substr(md5(rand()), 0, 8);
-        $ping->state = $pingData['state'] ?? 'run';
-        $ping->duration = $pingData['duration'] ?? null;
-        $ping->exit_code = $pingData['exit_code'] ?? null;
-        $ping->host = $pingData['host'] ?? null;
-        $ping->timestamp = $pingData['timestamp'] ?? time();
-        $ping->received_at = $pingData['received_at'] ?? time();
-        $ping->ip = $pingData['ip'] ?? null;
-        $ping->error = $pingData['error'] ?? null;
+        $ping->setMonitor($monitor);
+        $ping->setUniqueId($pingData['unique_id'] ?? substr(md5(rand()), 0, 8));
+        $ping->setState($pingData['state'] ?? PingState::RUN->value);
+        $ping->setDuration($pingData['duration'] ?? null);
+        $ping->setExitCode($pingData['exit_code'] ?? null);
+        $ping->setHost($pingData['host'] ?? null);
+        $ping->setTimestamp($pingData['timestamp'] ?? time());
+        $ping->setReceivedAt($pingData['received_at'] ?? time());
+        $ping->setIp($pingData['ip'] ?? null);
+        $ping->setError($pingData['error'] ?? null);
 
+        // Process tags
         if (isset($pingData['tags']) && is_array($pingData['tags'])) {
-            $ping->tags = $pingData['tags'];
-
             foreach ($pingData['tags'] as $tagName) {
-                $tag = Tag::findByName($tagName);
+                $tag = $this->tagRepository->findByName($tagName);
 
                 if ($tag === null) {
                     $tag = new Tag($tagName);
-                    $tag->save();
+                    $this->tagRepository->save($tag);
                 }
 
-                $tag->assignToMonitor($monitor->id);
+                $ping->addTag($tag);
+                $monitor->addTag($tag);
             }
         }
 
-        $ping->save();
+        // Save ping
+        $this->pingRepository->save($ping);
     }
 
     private function getLastProcessedTimestamp(): ?string

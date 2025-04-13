@@ -2,10 +2,11 @@
 
 namespace App\Controllers;
 
-use App\Models\Tag;
+use App\Application;
+use App\Repository\MonitorRepositoryInterface;
+use App\Repository\TagRepositoryInterface;
 use App\Services\ApiLogParser;
 use App\Services\LogParser;
-use App\Models\Monitor;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Twig\Environment;
@@ -13,54 +14,62 @@ use Twig\Environment;
 class DashboardController
 {
     private Environment $twig;
+    private Application $app;
+    private $container;
+    private MonitorRepositoryInterface $monitorRepository;
+    private TagRepositoryInterface $tagRepository;
 
-    public function __construct(Environment $twig)
+    public function __construct(Environment $twig, Application $app, $container)
     {
         $this->twig = $twig;
+        $this->app = $app;
+        $this->container = $container;
+        $this->monitorRepository = $container->get(MonitorRepositoryInterface::class);
+        $this->tagRepository = $container->get(TagRepositoryInterface::class);
     }
 
     public function index(Request $request): Response {
         $selectedTag = $request->query->get('tag');
         $selectedProject = $request->query->get('project');
 
-        $monitors = Monitor::findAll();
-        $tags = Tag::findAll();
-        $projectNames = Monitor::getAllProjectNames();
+        $monitors = $this->monitorRepository->findAll();
+        $tags = $this->tagRepository->findAll();
+        $projectNames = $this->monitorRepository->getAllProjectNames();
 
         $monitorStats = [];
         foreach ($monitors as $monitor) {
             $lastPing = $monitor->getLastPing();
-            $recentPings = $monitor->getRecentPings(10);
+            $recentPings = $monitor->getPings();
             $monitorTags = $monitor->getTags();
 
-            // Filtruj po tagu, jeśli podano
+            // Filter by tag, if provided
             if ($selectedTag && !$this->monitorHasTag($monitorTags, $selectedTag)) {
                 continue;
             }
 
-            // Filtruj po projekcie, jeśli podano
-            if ($selectedProject && $monitor->project_name !== $selectedProject) {
+            // Filter by project, if provided
+            if ($selectedProject && $monitor->getProjectName() !== $selectedProject) {
                 continue;
             }
 
-            $lastCompletedPings = array_filter($recentPings, static function ($ping) {
-                return $ping->state === 'complete';
+            $completedPings = $recentPings->filter(function ($ping) {
+                return $ping->getState() === 'complete';
             });
-            $lastFailedPings = array_filter($recentPings, static function ($ping) {
-                return $ping->state === 'fail';
+            $failedPings = $recentPings->filter(function ($ping) {
+                return $ping->getState() === 'fail';
             });
-            $healthyCount = count($lastCompletedPings);
-            $failingCount = count($lastFailedPings);
+            $healthyCount = count($completedPings);
+            $failingCount = count($failedPings);
             $totalCount = count($recentPings);
 
-            $monitorStats[$monitor->id] = [
+            $monitorStats[$monitor->getId()] = [
                 'monitor' => $monitor,
                 'lastPing' => $lastPing,
                 'healthyCount' => $healthyCount,
                 'failingCount' => $failingCount,
                 'healthPercentage' => $totalCount > 0 ? ($healthyCount / $totalCount) * 100 : 0,
                 'tags' => $monitorTags,
-                'expectedNextRun' => $this->calculateExpectedNextRun($recentPings)
+                'expectedNextRun' => $this->calculateExpectedNextRun($recentPings->toArray())
             ];
         }
 
@@ -77,8 +86,8 @@ class DashboardController
 
     public function sync(Request $request): Response
     {
-        $historyParser = new LogParser();
-        $apiParser = new ApiLogParser();
+        $historyParser = $this->container->get(LogParser::class);
+        $apiParser = $this->container->get(ApiLogParser::class);
 
         $historyImportCount = $historyParser->parse(true);
         $apiImportCount = $apiParser->parse(true);
@@ -91,10 +100,10 @@ class DashboardController
         ]));
     }
 
-    private function monitorHasTag(array $monitorTags, string $tagName): bool
+    private function monitorHasTag(iterable $monitorTags, string $tagName): bool
     {
         foreach ($monitorTags as $tag) {
-            if ($tag->name === $tagName) {
+            if ($tag->getName() === $tagName) {
                 return true;
             }
         }
@@ -113,20 +122,20 @@ class DashboardController
 
         // Sort pings by timestamp ascending
         usort($pings, function ($a, $b) {
-            return $a->timestamp - $b->timestamp;
+            return $a->getTimestamp() - $b->getTimestamp();
         });
 
         foreach ($pings as $ping) {
-            if ($ping->state === 'run' && $lastTimestamp !== null) {
-                $interval = $ping->timestamp - $lastTimestamp;
+            if ($ping->getState() === 'run' && $lastTimestamp !== null) {
+                $interval = $ping->getTimestamp() - $lastTimestamp;
 
                 if ($interval > 0) {
                     $intervals[] = $interval;
                 }
             }
 
-            if ($ping->state === 'run') {
-                $lastTimestamp = $ping->timestamp;
+            if ($ping->getState() === 'run') {
+                $lastTimestamp = $ping->getTimestamp();
             }
         }
 
@@ -143,7 +152,7 @@ class DashboardController
             ? ($intervals[$middle - 1] + $intervals[$middle]) / 2
             : $intervals[$middle];
 
-        $lastRun = end($pings)->timestamp;
+        $lastRun = end($pings)->getTimestamp();
         $expectedNext = $lastRun + $medianInterval;
 
         if ($expectedNext < time()) {

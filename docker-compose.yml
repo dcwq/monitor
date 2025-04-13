@@ -1,0 +1,48 @@
+services:
+  web:
+    build: docker/web
+    container_name: cronitorex
+    volumes:
+      - .:/var/www/cronitorex-web
+      - ./docker/web/vhost-cronitorex.conf:/etc/apache2/sites-enabled/vhost-cronitorex.conf
+      - ./docker/web/php.ini:/usr/local/etc/php/php.ini
+    tty: true
+    links:
+      - db
+    networks:
+      cronitorex_all:
+        aliases:
+          - cronitorex.local
+        ipv4_address: 10.91.0.12
+  db:
+    image: mysql:5.7
+    container_name: cronitorex_db
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=cronitorex
+      - MYSQL_USER=cronitorex
+      - MYSQL_PASSWORD=cronitorex
+      - REDIS_HOST=cache
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=cronitorex
+    networks:
+      cronitorex_all:
+        aliases:
+          - db
+        ipv4_address: 10.91.0.13
+    volumes:
+      - ./mysql:/var/lib/mysql
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    networks:
+      cronitorex_all:
+        ipv4_address: 10.91.0.14
+    ports:
+      - 8080:80
+networks:
+  cronitorex_all:
+    name: cronitorex_all
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.91.0.0/16
