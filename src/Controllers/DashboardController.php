@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Application;
+use App\Repository\MonitorGroupRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
 use App\Repository\TagRepositoryInterface;
 use App\Services\ApiLogParser;
@@ -18,6 +19,7 @@ class DashboardController
     private $container;
     private MonitorRepositoryInterface $monitorRepository;
     private TagRepositoryInterface $tagRepository;
+    private MonitorGroupRepositoryInterface $groupRepository;
 
     public function __construct(Environment $twig, Application $app, $container)
     {
@@ -26,15 +28,18 @@ class DashboardController
         $this->container = $container;
         $this->monitorRepository = $container->get(MonitorRepositoryInterface::class);
         $this->tagRepository = $container->get(TagRepositoryInterface::class);
+        $this->groupRepository = $container->get(MonitorGroupRepositoryInterface::class);
     }
 
     public function index(Request $request): Response {
         $selectedTag = $request->query->get('tag');
         $selectedProject = $request->query->get('project');
+        $selectedGroup = $request->query->get('group');
 
         $monitors = $this->monitorRepository->findAll();
         $tags = $this->tagRepository->findAll();
         $projectNames = $this->monitorRepository->getAllProjectNames();
+        $groups = $this->groupRepository->findAll();
 
         $monitorStats = [];
         foreach ($monitors as $monitor) {
@@ -49,6 +54,11 @@ class DashboardController
 
             // Filter by project, if provided
             if ($selectedProject && $monitor->getProjectName() !== $selectedProject) {
+                continue;
+            }
+
+            // Filter by group, if provided
+            if ($selectedGroup && (!$monitor->getGroup() || $monitor->getGroup()->getId() != $selectedGroup)) {
                 continue;
             }
 
@@ -79,6 +89,8 @@ class DashboardController
             'selectedTag' => $selectedTag,
             'projectNames' => $projectNames,
             'selectedProject' => $selectedProject,
+            'groups' => $groups,
+            'selectedGroup' => $selectedGroup,
             'totalMonitors' => count($monitors)
         ]));
     }

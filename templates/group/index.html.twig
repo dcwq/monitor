@@ -1,0 +1,51 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Monitor Groups - Cronitorex{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Monitor Groups</h1>
+            <a href="{{ app_url }}/groups/create" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i> Add New Group
+            </a>
+        </div>
+
+        {% if groups|length > 0 %}
+            <div class="card mb-4">
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Monitors</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for group in groups %}
+                            <tr>
+                                <td><a href="{{ app_url }}/groups/{{ group.id }}">{{ group.name }}</a></td>
+                                <td>{{ group.description }}</td>
+                                <td>{{ group.monitors.count }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ app_url }}/groups/{{ group.id }}/edit" class="btn btn-outline-primary">Edit</a>
+                                        <a href="{{ app_url }}/groups/{{ group.id }}/notifications" class="btn btn-outline-info">Notifications</a>
+                                        <a href="{{ app_url }}/groups/{{ group.id }}/delete" class="btn btn-outline-danger" onclick="return confirm('Are you sure you want to delete this group?');">Delete</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i> No monitor groups have been created yet. Create your first group to start organizing your monitors.
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

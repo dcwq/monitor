@@ -1,0 +1,72 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ group.name }} - Cronitorex{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ group.name }}</h1>
+            <div>
+                <a href="{{ app_url }}/groups/{{ group.id }}/edit" class="btn btn-primary">Edit Group</a>
+                <a href="{{ app_url }}/groups/{{ group.id }}/notifications" class="btn btn-info">Manage Notifications</a>
+            </div>
+        </div>
+
+        {% if group.description %}
+            <div class="alert alert-secondary mb-4">
+                {{ group.description }}
+            </div>
+        {% endif %}
+
+        <h2 class="mb-3">Monitors in this Group</h2>
+
+        {% if monitors|length > 0 %}
+            <div class="row">
+                {% for monitor in monitors %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">{{ monitor.name }}</h5>
+                                <span class="badge bg-light text-dark">Job</span>
+                            </div>
+                            <div class="card-body">
+                                {% if monitor.project_name %}
+                                    <div class="mb-2">
+                                        <span class="text-muted">Project:</span> {{ monitor.project_name }}
+                                    </div>
+                                {% endif %}
+
+                                <div class="mb-2">
+                                    {% set lastPing = monitor.lastPing %}
+                                    {% if lastPing %}
+                                        <span class="badge {{ lastPing.state == 'complete' ? 'bg-success' : (lastPing.state == 'run' ? 'bg-primary' : 'bg-danger') }}">
+                                        {{ lastPing.state|capitalize }}
+                                    </span>
+                                        <small class="text-muted">{{ lastPing.timestamp|date('Y-m-d H:i') }}</small>
+                                    {% else %}
+                                        <span class="badge bg-secondary">No pings</span>
+                                    {% endif %}
+                                </div>
+
+                                {% if monitor.tags|length > 0 %}
+                                    <div class="mb-2">
+                                        {% for tag in monitor.tags %}
+                                            <span class="badge bg-secondary">{{ tag.name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer">
+                                <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-sm btn-outline-primary w-100">View Details</a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i> No monitors have been assigned to this group yet.
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

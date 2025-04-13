@@ -107,6 +107,10 @@ class LogParser
         // Process tags
         if (isset($pingData['tags']) && is_array($pingData['tags'])) {
             foreach ($pingData['tags'] as $tagName) {
+                if (empty($tagName)) {
+                    continue;
+                }
+
                 $tag = $this->tagRepository->findByName($tagName);
 
                 if ($tag === null) {

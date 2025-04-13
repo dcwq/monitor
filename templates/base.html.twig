@@ -89,10 +89,26 @@
     <nav class="navbar navbar-expand-lg navbar-light mb-4">
         <div class="container">
             <a class="navbar-brand fw-bold" href="{{ app_url }}/">Cronitorex</a>
-            <div class="d-flex">
-                <a href="{{ app_url }}/sync" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-repeat me-1"></i> Sync Logs
-                </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ app_url }}/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ app_url }}/groups">Groups</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ app_url }}/config/notification-channels">Notifications</a>
+                    </li>
+                </ul>
+                <div class="d-flex">
+                    <a href="{{ app_url }}/sync" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat me-1"></i> Sync Logs
+                    </a>
+                </div>
             </div>
         </div>
     </nav>

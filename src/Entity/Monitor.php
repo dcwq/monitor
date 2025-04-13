@@ -23,6 +23,10 @@ class Monitor
     #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
     private ?string $project_name = null;
 
+    #[ORM\ManyToOne(targetEntity: MonitorGroup::class, inversedBy: 'monitors')]
+    #[ORM\JoinColumn(name: 'group_id', referencedColumnName: 'id', nullable: true)]
+    private ?MonitorGroup $group = null;
+
     #[ORM\OneToMany(mappedBy: 'monitor', targetEntity: Ping::class, cascade: ['persist'])]
     private Collection $pings;
 
@@ -194,5 +198,16 @@ class Monitor
         });
 
         return $iterator->current();
+    }
+
+    public function getGroup(): ?MonitorGroup
+    {
+        return $this->group;
+    }
+
+    public function setGroup(?MonitorGroup $group): self
+    {
+        $this->group = $group;
+        return $this;
     }
 }

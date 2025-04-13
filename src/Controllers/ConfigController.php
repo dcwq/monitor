@@ -5,9 +5,11 @@ namespace App\Controllers;
 
 use App\Application;
 use App\Entity\MonitorConfig;
+use App\Entity\NotificationChannel;
 use App\Repository\MonitorConfigRepositoryInterface;
 use App\Repository\MonitorOverdueHistoryRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
+use App\Repository\NotificationChannelRepositoryInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -19,10 +21,11 @@ class ConfigController
     private Application $app;
     private $container;
 
-    private $connection;
     private MonitorRepositoryInterface $monitorRepository;
     private MonitorConfigRepositoryInterface $monitorConfigRepository;
     private MonitorOverdueHistoryRepositoryInterface $overdueHistoryRepository;
+    private NotificationChannelRepositoryInterface $notificationChannelRepository;
+    private \Doctrine\ORM\EntityManagerInterface $entityManager;
 
     public function __construct(Environment $twig, Application $app, $container)
     {
@@ -32,7 +35,8 @@ class ConfigController
         $this->monitorRepository = $container->get(MonitorRepositoryInterface::class);
         $this->monitorConfigRepository = $container->get(MonitorConfigRepositoryInterface::class);
         $this->overdueHistoryRepository = $container->get(MonitorOverdueHistoryRepositoryInterface::class);
-        $this->connection = $container->get(\Doctrine\ORM\EntityManagerInterface::class)->getConnection();
+        $this->notificationChannelRepository = $container->get(NotificationChannelRepositoryInterface::class);
+        $this->entityManager = $container->get(\Doctrine\ORM\EntityManagerInterface::class);
     }
 
     public function editMonitorConfig(Request $request, int $id): Response
@@ -68,16 +72,21 @@ class ConfigController
     public function notificationChannels(Request $request): Response
     {
         // Get all notification channels
-        $stmt = $this->connection->prepare('SELECT * FROM notification_channels ORDER BY name');
-        $resultSet = $stmt->executeQuery();
-        $channels = $resultSet->fetchAllAssociative();
+        $channels = $this->notificationChannelRepository->findAll();
+
+        if (empty($channels)) {
+            // Skip decoding if no channels exist
+            return new Response($this->twig->render('config/notification_channels.html.twig', [
+                'channels' => []
+            ]));
+        }
 
         // Decode JSON config for each channel
         foreach ($channels as &$channel) {
-            if (isset($channel['config']) && is_string($channel['config'])) {
-                $channel['config_decoded'] = json_decode($channel['config'], true);
+            if (is_string($channel->getConfig())) {
+                $channel->config_decoded = json_decode($channel->getConfig(), true);
             } else {
-                $channel['config_decoded'] = [];
+                $channel->config_decoded = [];
             }
         }
 
@@ -116,16 +125,13 @@ class ConfigController
                     return new Response('Invalid channel type', 400);
             }
 
-            // Save new channel
-            $stmt = $this->connection->prepare('
-                INSERT INTO notification_channels (name, type, config) 
-                VALUES (:name, :type, :config)
-            ');
-            $stmt->executeStatement([
-                'name' => $name,
-                'type' => $type,
-                'config' => json_encode($config)
-            ]);
+            // Create and save new channel
+            $channel = new NotificationChannel();
+            $channel->setName($name);
+            $channel->setType($type);
+            $channel->setConfig(json_encode($config));
+
+            $this->notificationChannelRepository->save($channel);
 
             return new RedirectResponse($this->app->generateUrl('notification_channels'));
         }
@@ -136,22 +142,20 @@ class ConfigController
     public function editChannel(Request $request, int $id): Response
     {
         // Get channel
-        $stmt = $this->connection->prepare('SELECT * FROM notification_channels WHERE id = :id');
-        $resultSet = $stmt->executeQuery(['id' => $id]);
-        $channel = $resultSet->fetchAssociative();
+        $channel = $this->notificationChannelRepository->findById($id);
 
         if (!$channel) {
             return new Response('Channel not found', 404);
         }
 
         $config = [];
-        if (isset($channel['config']) && is_string($channel['config'])) {
-            $config = json_decode($channel['config'], true);
+        if ($channel->getConfig()) {
+            $config = json_decode($channel->getConfig(), true);
         }
 
         if ($request->isMethod('POST')) {
             $name = $request->request->get('name');
-            $type = $channel['type']; // Don't change type of existing channel
+            $type = $channel->getType(); // Don't change type of existing channel
             $newConfig = [];
 
             // Update config based on channel type
@@ -176,16 +180,9 @@ class ConfigController
             }
 
             // Update channel
-            $stmt = $this->connection->prepare('
-                UPDATE notification_channels 
-                SET name = :name, config = :config 
-                WHERE id = :id
-            ');
-            $stmt->executeStatement([
-                'id' => $id,
-                'name' => $name,
-                'config' => json_encode($newConfig)
-            ]);
+            $channel->setName($name);
+            $channel->setConfig(json_encode($newConfig));
+            $this->notificationChannelRepository->save($channel);
 
             return new RedirectResponse($this->app->generateUrl('notification_channels'));
         }
@@ -204,21 +201,10 @@ class ConfigController
         }
 
         // Get all channels
-        $stmt = $this->connection->prepare('SELECT * FROM notification_channels ORDER BY name');
-        $resultSet = $stmt->executeQuery();
-        $channels = $resultSet->fetchAllAssociative();
+        $channels = $this->notificationChannelRepository->findAll();
 
         // Get channels associated with monitor
-        $stmt = $this->connection->prepare('
-            SELECT channel_id, notify_on_fail, notify_on_overdue, notify_on_resolve 
-            FROM monitor_notifications 
-            WHERE monitor_id = :monitor_id
-        ');
-        $resultSet = $stmt->executeQuery(['monitor_id' => $monitor->getId()]);
-        $monitorChannels = [];
-        while ($row = $resultSet->fetchAssociative()) {
-            $monitorChannels[$row['channel_id']] = $row;
-        }
+        $monitorChannels = $this->notificationChannelRepository->findChannelsForMonitor($monitor->getId());
 
         if ($request->isMethod('POST')) {
             // Directly use $_POST
@@ -228,23 +214,17 @@ class ConfigController
             $notifyOnResolve = isset($_POST['notify_on_resolve']) ? (array)$_POST['notify_on_resolve'] : [];
 
             // Remove all existing associations
-            $stmt = $this->connection->prepare('DELETE FROM monitor_notifications WHERE monitor_id = :monitor_id');
-            $stmt->executeStatement(['monitor_id' => $monitor->getId()]);
+            $this->notificationChannelRepository->removeAllMonitorNotifications($monitor->getId());
 
             // Add new associations
             foreach ($selectedChannels as $channelId) {
-                $stmt = $this->connection->prepare('
-                    INSERT INTO monitor_notifications 
-                    (monitor_id, channel_id, notify_on_fail, notify_on_overdue, notify_on_resolve) 
-                    VALUES (:monitor_id, :channel_id, :notify_on_fail, :notify_on_overdue, :notify_on_resolve)
-                ');
-                $stmt->executeStatement([
-                    'monitor_id' => $monitor->getId(),
-                    'channel_id' => $channelId,
-                    'notify_on_fail' => in_array($channelId, $notifyOnFail) ? 1 : 0,
-                    'notify_on_overdue' => in_array($channelId, $notifyOnOverdue) ? 1 : 0,
-                    'notify_on_resolve' => in_array($channelId, $notifyOnResolve) ? 1 : 0
-                ]);
+                $this->notificationChannelRepository->addMonitorNotification(
+                    $monitor->getId(),
+                    (int)$channelId,
+                    in_array($channelId, $notifyOnFail),
+                    in_array($channelId, $notifyOnOverdue),
+                    in_array($channelId, $notifyOnResolve)
+                );
             }
 
             return new RedirectResponse($this->app->generateUrl('monitor_show', ['id' => $monitor->getId()]));

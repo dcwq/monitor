@@ -1,14 +1,24 @@
 <?php
 // config/services.php
 
+use App\Repository\DoctrineGroupNotificationRepository;
 use App\Repository\DoctrineMonitorConfigRepository;
+use App\Repository\DoctrineMonitorGroupRepository;
+use App\Repository\DoctrineMonitorNotificationRepository;
 use App\Repository\DoctrineMonitorOverdueHistoryRepository;
 use App\Repository\DoctrineMonitorRepository;
+use App\Repository\DoctrineNotificationChannelRepository;
+use App\Repository\DoctrineNotificationHistoryRepository;
 use App\Repository\DoctrinePingRepository;
 use App\Repository\DoctrineTagRepository;
+use App\Repository\GroupNotificationRepositoryInterface;
 use App\Repository\MonitorConfigRepositoryInterface;
+use App\Repository\MonitorGroupRepositoryInterface;
+use App\Repository\MonitorNotificationRepositoryInterface;
 use App\Repository\MonitorOverdueHistoryRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
+use App\Repository\NotificationChannelRepositoryInterface;
+use App\Repository\NotificationHistoryRepositoryInterface;
 use App\Repository\PingRepositoryInterface;
 use App\Repository\TagRepositoryInterface;
 use App\Services\ApiLogParser;
@@ -59,14 +69,23 @@ $container->set(PingRepositoryInterface::class, fn() => new DoctrinePingReposito
 $container->set(TagRepositoryInterface::class, fn() => new DoctrineTagRepository($managerRegistry));
 $container->set(MonitorConfigRepositoryInterface::class, fn() => new DoctrineMonitorConfigRepository($managerRegistry));
 $container->set(MonitorOverdueHistoryRepositoryInterface::class, fn() => new DoctrineMonitorOverdueHistoryRepository($managerRegistry));
-    $container->set(EntityManagerInterface::class, fn() => $entityManager);
+$container->set(NotificationChannelRepositoryInterface::class, fn() => new DoctrineNotificationChannelRepository($managerRegistry));
+$container->set(NotificationHistoryRepositoryInterface::class, fn() => new DoctrineNotificationHistoryRepository($managerRegistry));
+$container->set(MonitorNotificationRepositoryInterface::class, fn() => new DoctrineMonitorNotificationRepository($managerRegistry));
+$container->set(MonitorGroupRepositoryInterface::class, fn() => new DoctrineMonitorGroupRepository($managerRegistry));
+$container->set(MonitorNotificationRepositoryInterface::class, fn() => new DoctrineMonitorNotificationRepository($managerRegistry));
+$container->set(MonitorGroupRepositoryInterface::class, fn() => new DoctrineMonitorGroupRepository($managerRegistry));
+$container->set(GroupNotificationRepositoryInterface::class, fn() => new DoctrineGroupNotificationRepository($managerRegistry));
+$container->set(EntityManagerInterface::class, fn() => $entityManager);
 
-$container->set(NotificationService::class, function () use ($container, $entityManager) {
+$container->set(NotificationService::class, function () use ($container) {
     return new NotificationService(
-        $entityManager->getConnection(),
+        $container->get(EntityManagerInterface::class),
         $container->get(MonitorRepositoryInterface::class),
         $container->get(MonitorConfigRepositoryInterface::class),
-        $container->get(MonitorOverdueHistoryRepositoryInterface::class)
+        $container->get(MonitorOverdueHistoryRepositoryInterface::class),
+        $container->get(NotificationChannelRepositoryInterface::class),
+        $container->get(GroupNotificationRepositoryInterface::class)
     );
 });
 

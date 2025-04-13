@@ -8,20 +8,25 @@ use App\Services\NotificationService;
 
 // Load EntityManager
 $entityManager = require_once __DIR__ . '/../config/doctrine-bootstrap.php';
+$managerRegistry = new \App\Persistence\SimpleManagerRegistry($entityManager);
 
 // Load repositories and services via Dependency Injection
 // Create ManagerRegistry for Doctrine repositories
-$managerRegistry = new \App\Persistence\SimpleManagerRegistry($entityManager);
 
 $monitorRepository = new \App\Repository\DoctrineMonitorRepository($managerRegistry);
 $monitorConfigRepository = new \App\Repository\DoctrineMonitorConfigRepository($managerRegistry);
 $overdueHistoryRepository = new \App\Repository\DoctrineMonitorOverdueHistoryRepository($managerRegistry);
 
+$notificationChannelRepository = new \App\Repository\DoctrineNotificationChannelRepository($managerRegistry);
+$groupNotificationRepository = new \App\Repository\DoctrineGroupNotificationRepository($managerRegistry);
+
 $notificationService = new NotificationService(
-    $entityManager->getConnection(),
+    $entityManager,
     $monitorRepository,
     $monitorConfigRepository,
-    $overdueHistoryRepository
+    $overdueHistoryRepository,
+    $notificationChannelRepository,
+    $groupNotificationRepository
 );
 
 $action = $argv[1] ?? null;

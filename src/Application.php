@@ -4,6 +4,7 @@ namespace App;
 
 use App\Controllers\ConfigController;
 use App\Controllers\DashboardController;
+use App\Controllers\GroupController;
 use App\Controllers\MonitorController;
 use Doctrine\Persistence\Mapping\Driver\SymfonyFileLocator;
 use Symfony\Component\Config\FileLocator;
@@ -97,6 +98,26 @@ class Application
         ], ['id' => '\d+']));
         $this->routes->add('overdue_history', new Route('/monitors/{id}/overdue-history', [
             '_controller' => [new ConfigController($this->twig, $this, $this->container), 'overdueHistory']
+        ], ['id' => '\d+']));
+
+        // Group routes
+        $this->routes->add('groups', new Route('/groups', [
+            '_controller' => [new GroupController($this->twig, $this, $this->container), 'index']
+        ]));
+        $this->routes->add('group_create', new Route('/groups/create', [
+            '_controller' => [new GroupController($this->twig, $this, $this->container), 'create']
+        ]));
+        $this->routes->add('group_edit', new Route('/groups/{id}/edit', [
+            '_controller' => [new GroupController($this->twig, $this, $this->container), 'edit']
+        ], ['id' => '\d+']));
+        $this->routes->add('group_delete', new Route('/groups/{id}/delete', [
+            '_controller' => [new GroupController($this->twig, $this, $this->container), 'delete']
+        ], ['id' => '\d+']));
+        $this->routes->add('group_show', new Route('/groups/{id}', [
+            '_controller' => [new GroupController($this->twig, $this, $this->container), 'show']
+        ], ['id' => '\d+']));
+        $this->routes->add('group_notifications', new Route('/groups/{id}/notifications', [
+            '_controller' => [new GroupController($this->twig, $this, $this->container), 'manageNotifications']
         ], ['id' => '\d+']));
 
         // Notification channels routes

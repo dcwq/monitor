@@ -3,21 +3,36 @@
 {% block title %}Edit {{ monitor.name }} - Cronitorex{% endblock %}
 
 {% block content %}
-    <h1>Edit Monitor: {{ monitor.name }}</h1>
+    <div class="container">
+        <h1>Edit Monitor: {{ monitor.name }}</h1>
 
-    <form method="post">
-        <div class="form-group">
-            <label for="name">Monitor Name:</label>
-            <input type="text" id="name" name="name" value="{{ monitor.name }}" required class="form-control">
-        </div>
+        <form method="post">
+            <div class="form-group mb-3">
+                <label for="name">Monitor Name:</label>
+                <input type="text" id="name" name="name" value="{{ monitor.name }}" required class="form-control">
+            </div>
 
-        <div class="form-group">
-            <label for="project_name">Project Name:</label>
-            <input type="text" id="project_name" name="project_name" value="{{ monitor.project_name }}" class="form-control">
-            <small class="form-text text-muted">Optional. Used for grouping related monitors.</small>
-        </div>
+            <div class="form-group mb-3">
+                <label for="project_name">Project Name:</label>
+                <input type="text" id="project_name" name="project_name" value="{{ monitor.project_name }}" class="form-control">
+                <small class="form-text text-muted">Optional. Used for grouping related monitors.</small>
+            </div>
 
-        <button type="submit" class="btn btn-primary">Save Changes</button>
-        <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-secondary">Cancel</a>
-    </form>
+            <div class="form-group mb-3">
+                <label for="group_id">Group:</label>
+                <select id="group_id" name="group_id" class="form-select">
+                    <option value="">-- None --</option>
+                    {% for group in groups %}
+                        <option value="{{ group.id }}" {% if monitor.group and monitor.group.id == group.id %}selected{% endif %}>
+                            {{ group.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="form-text text-muted">Optional. Assign this monitor to a group for organizational purposes.</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
 {% endblock %}

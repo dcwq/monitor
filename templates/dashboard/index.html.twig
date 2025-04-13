@@ -44,6 +44,22 @@
     </div>
 {% endif %}
 
+{% if groups|length > 0 %}
+    <div class="row mb-0">
+        <div class="col-md-6">
+            <h1 class="h4 mb-0">Groups</h1>
+        </div>
+    </div>
+    <div class="mb-4">
+        <div class="d-flex flex-wrap">
+            <a href="{{ app_url }}/" class="btn btn-sm me-2 mb-2 {{ not selectedGroup ? 'btn-primary' : 'btn-outline-secondary' }}">All</a>
+            {% for group in groups %}
+                <a href="{{ app_url }}/?group={{ group.id }}" class="btn btn-sm me-2 mb-2 {{ selectedGroup == group.id ? 'btn-primary' : 'btn-outline-secondary' }}">{{ group.name }}</a>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+
 <div class="row">
     {% for monitorId, stats in monitors %}
     {% set monitor = stats.monitor %}

@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Application;
 use App\Enum\PingState;
+use App\Repository\MonitorGroupRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
 use App\Repository\PingRepositoryInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -13,11 +14,12 @@ use Twig\Environment;
 
 class MonitorController
 {
+    private $container;
     private Environment $twig;
     private Application $app;
-    private $container;
     private MonitorRepositoryInterface $monitorRepository;
     private PingRepositoryInterface $pingRepository;
+    private MonitorGroupRepositoryInterface $groupRepository;
 
     public function __construct(Environment $twig, Application $app, $container)
     {
@@ -26,7 +28,9 @@ class MonitorController
         $this->container = $container;
         $this->monitorRepository = $container->get(MonitorRepositoryInterface::class);
         $this->pingRepository = $container->get(PingRepositoryInterface::class);
+        $this->groupRepository = $container->get(MonitorGroupRepositoryInterface::class);
     }
+
 
     public function edit(Request $request, int $id): Response {
         $monitor = $this->monitorRepository->findById($id);
@@ -34,16 +38,29 @@ class MonitorController
             return new Response('Monitor not found', 404);
         }
 
+        // Get all available groups for dropdown
+        $groups = $this->groupRepository->findAll();
+
         if ($request->isMethod('POST')) {
             $monitor->setName($request->request->get('name'));
             $monitor->setProjectName($request->request->get('project_name'));
+
+            // Handle group assignment
+            $groupId = $request->request->get('group_id');
+            if (!empty($groupId)) {
+                $group = $this->groupRepository->findById((int)$groupId);
+                $monitor->setGroup($group);
+            } else {
+                $monitor->setGroup(null);
+            }
 
             $this->monitorRepository->save($monitor);
             return new RedirectResponse($this->app->generateUrl('monitor_show', ['id' => $monitor->getId()]));
         }
 
         return new Response($this->twig->render('monitor/edit.html.twig', [
-            'monitor' => $monitor
+            'monitor' => $monitor,
+            'groups' => $groups
         ]));
     }
 
