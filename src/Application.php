@@ -2,6 +2,7 @@
 
 namespace App;
 
+use App\Controllers\ConfigController;
 use App\Controllers\DashboardController;
 use Dotenv\Dotenv;
 use Symfony\Component\HttpFoundation\Request;
@@ -13,6 +14,8 @@ use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
+use Twig\TwigFilter;
+use Twig\TwigFunction;
 
 class Application
 {
@@ -31,7 +34,7 @@ class Application
         $dotenv = Dotenv::createImmutable(dirname(__DIR__));
         $dotenv->load();
     }
-    
+
     private function initializeTwig(): void
     {
         $loader = new FilesystemLoader(dirname(__DIR__) . '/templates');
@@ -40,34 +43,66 @@ class Application
             'debug' => true,
             'auto_reload' => true
         ]);
-        
+
         $this->twig->addGlobal('app_url', $_ENV['APP_URL']);
+
+        // Dodaj funkcję url() do Twig
+        $this->twig->addFunction(new TwigFunction('url', function (string $routeName, array $parameters = []) {
+            return $this->generateUrl($routeName, $parameters);
+        }));
+
+        // Dodaj filtr json_decode do Twig
+        $this->twig->addFilter(new TwigFilter('json_decode', function ($json, $assoc = true) {
+            return json_decode($json, $assoc);
+        }));
     }
-    
+
     private function setupRoutes(): void
     {
         $this->routes = new RouteCollection();
-        
+
         // Dashboard routes
         $this->routes->add('dashboard', new Route('/', [
-            '_controller' => [new DashboardController($this->twig), 'index']
+            '_controller' => [new DashboardController($this->twig, $this), 'index']
         ]));
-        
         $this->routes->add('sync', new Route('/sync', [
-            '_controller' => [new DashboardController($this->twig), 'sync']
+            '_controller' => [new DashboardController($this->twig, $this), 'sync']
         ]));
-        
+
         // Monitor routes
         $this->routes->add('monitor_show', new Route('/monitors/{id}', [
-            '_controller' => [new MonitorController($this->twig), 'show']
+            '_controller' => [new MonitorController($this->twig, $this), 'show']
         ], ['id' => '\d+']));
-        
+        $this->routes->add('monitor_edit', new Route('/monitors/{id}/edit', [
+            '_controller' => [new MonitorController($this->twig, $this), 'edit']
+        ], ['id' => '\d+']));
         $this->routes->add('monitor_latest_activity', new Route('/monitors/{id}/latest-activity', [
-            '_controller' => [new MonitorController($this->twig), 'latestActivity']
+            '_controller' => [new MonitorController($this->twig, $this), 'latestActivity']
         ], ['id' => '\d+']));
-        
         $this->routes->add('monitor_latest_issues', new Route('/monitors/{id}/latest-issues', [
-            '_controller' => [new MonitorController($this->twig), 'latestIssues']
+            '_controller' => [new MonitorController($this->twig, $this), 'latestIssues']
+        ], ['id' => '\d+']));
+
+        // Config routes
+        $this->routes->add('monitor_config', new Route('/monitors/{id}/config', [
+            '_controller' => [new ConfigController($this->twig, $this), 'editMonitorConfig']
+        ], ['id' => '\d+']));
+        $this->routes->add('monitor_notifications', new Route('/monitors/{id}/notifications', [
+            '_controller' => [new ConfigController($this->twig, $this), 'monitorNotifications']
+        ], ['id' => '\d+']));
+        $this->routes->add('overdue_history', new Route('/monitors/{id}/overdue-history', [
+            '_controller' => [new ConfigController($this->twig, $this), 'overdueHistory']
+        ], ['id' => '\d+']));
+
+        // Notification channels routes
+        $this->routes->add('notification_channels', new Route('/config/notification-channels', [
+            '_controller' => [new ConfigController($this->twig, $this), 'notificationChannels']
+        ]));
+        $this->routes->add('add_channel', new Route('/config/notification-channels/add', [
+            '_controller' => [new ConfigController($this->twig, $this), 'addChannel']
+        ]));
+        $this->routes->add('edit_channel', new Route('/config/notification-channels/{id}/edit', [
+            '_controller' => [new ConfigController($this->twig, $this), 'editChannel']
         ], ['id' => '\d+']));
     }
     
@@ -89,5 +124,23 @@ class Application
         } catch (\Exception $e) {
             return new Response('An error occurred: ' . $e->getMessage(), 500);
         }
+    }
+
+    public function generateUrl(string $routeName, array $parameters = []): string
+    {
+        $routes = $this->routes->all();
+        if (!isset($routes[$routeName])) {
+            throw new \InvalidArgumentException(sprintf('Route "%s" does not exist.', $routeName));
+        }
+
+        $route = $routes[$routeName];
+        $path = $route->getPath();
+
+        // Zastąp placeholdery parametrami
+        foreach ($parameters as $name => $value) {
+            $path = str_replace(sprintf('{%s}', $name), $value, $path);
+        }
+
+        return $_ENV['APP_URL'] . $path;
     }
 }

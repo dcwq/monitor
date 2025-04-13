@@ -19,32 +19,36 @@ class DashboardController
         $this->twig = $twig;
     }
 
-    public function index(Request $request): Response
-    {
+    public function index(Request $request): Response {
         $selectedTag = $request->query->get('tag');
+        $selectedProject = $request->query->get('project');
 
         $monitors = Monitor::findAll();
         $tags = Tag::findAll();
+        $projectNames = Monitor::getAllProjectNames();
 
         $monitorStats = [];
-
         foreach ($monitors as $monitor) {
             $lastPing = $monitor->getLastPing();
             $recentPings = $monitor->getRecentPings(10);
             $monitorTags = $monitor->getTags();
 
+            // Filtruj po tagu, jeśli podano
             if ($selectedTag && !$this->monitorHasTag($monitorTags, $selectedTag)) {
+                continue;
+            }
+
+            // Filtruj po projekcie, jeśli podano
+            if ($selectedProject && $monitor->project_name !== $selectedProject) {
                 continue;
             }
 
             $lastCompletedPings = array_filter($recentPings, static function ($ping) {
                 return $ping->state === 'complete';
             });
-
             $lastFailedPings = array_filter($recentPings, static function ($ping) {
                 return $ping->state === 'fail';
             });
-
             $healthyCount = count($lastCompletedPings);
             $failingCount = count($lastFailedPings);
             $totalCount = count($recentPings);
@@ -64,9 +68,12 @@ class DashboardController
             'monitors' => $monitorStats,
             'tags' => $tags,
             'selectedTag' => $selectedTag,
+            'projectNames' => $projectNames,
+            'selectedProject' => $selectedProject,
             'totalMonitors' => count($monitors)
         ]));
     }
+
 
     public function sync(Request $request): Response
     {

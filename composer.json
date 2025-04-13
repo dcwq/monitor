@@ -1,6 +1,6 @@
 {
     "name": "prs/cronitor",
-    "description": "UI for displaying CronitorClone logs",
+    "description": "UI for displaying Cronitorex logs",
     "type": "project",
     "require": {
         "php": ">=8.1",

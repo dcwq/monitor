@@ -1,0 +1,73 @@
+{# templates/config/monitor_notifications.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Notifications for {{ monitor.name }} - Cronitorex{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Notifications for {{ monitor.name }}</h1>
+
+    {% if channels|length > 0 %}
+    <form method="post">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th>Use</th>
+                <th>Channel</th>
+                <th>Type</th>
+                <th>On Fail</th>
+                <th>On Overdue</th>
+                <th>On Resolve</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for channel in channels %}
+            {% set isSelected = monitorChannels[channel.id] is defined %}
+            <tr>
+                <td>
+                    <input type="checkbox" name="channels[]" value="{{ channel.id }}"
+                           {% if isSelected %}checked{% endif %} class="form-check-input">
+                </td>
+                <td>{{ channel.name }}</td>
+                <td>
+                                <span class="badge
+                                    {% if channel.type == 'slack' %}bg-primary
+                                    {% elseif channel.type == 'email' %}bg-success
+                                    {% elseif channel.type == 'sms' %}bg-warning
+                                    {% else %}bg-secondary
+                                    {% endif %}
+                                ">
+                                    {{ channel.type|capitalize }}
+                                </span>
+                </td>
+                <td>
+                    <input type="checkbox" name="notify_on_fail[]" value="{{ channel.id }}"
+                           {% if isSelected and monitorChannels[channel.id].notify_on_fail %}checked{% endif %}
+                           class="form-check-input">
+                </td>
+                <td>
+                    <input type="checkbox" name="notify_on_overdue[]" value="{{ channel.id }}"
+                           {% if isSelected and monitorChannels[channel.id].notify_on_overdue %}checked{% endif %}
+                           class="form-check-input">
+                </td>
+                <td>
+                    <input type="checkbox" name="notify_on_resolve[]" value="{{ channel.id }}"
+                           {% if isSelected and monitorChannels[channel.id].notify_on_resolve %}checked{% endif %}
+                           class="form-check-input">
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <button type="submit" class="btn btn-primary">Save Notification Settings</button>
+        <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-secondary">Cancel</a>
+    </form>
+    {% else %}
+        <div class="alert alert-warning">
+            No notification channels have been configured yet.
+            <a href="{{ app_url }}/config/notification-channels/add" class="alert-link">Add a notification channel</a> first.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

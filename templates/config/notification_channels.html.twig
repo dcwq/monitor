@@ -1,0 +1,61 @@
+{# templates/config/notification_channels.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Notification Channels - Cronitorex{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Notification Channels</h1>
+
+        <div class="mb-3">
+            <a href="{{ app_url }}/config/notification-channels/add" class="btn btn-primary">Add New Channel</a>
+        </div>
+
+        {% if channels|length > 0 %}
+            <table class="table table-striped">
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Configuration</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for channel in channels %}
+                    <tr>
+                        <td>{{ channel.name }}</td>
+                        <td>
+                            <span class="badge
+                                {% if channel.type == 'slack' %}bg-primary
+                                {% elseif channel.type == 'email' %}bg-success
+                                {% elseif channel.type == 'sms' %}bg-warning
+                                {% else %}bg-secondary
+                                {% endif %}
+                            ">
+                                {{ channel.type|capitalize }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if channel.type == 'slack' %}
+                                Webhook: {{ channel.config_decoded.webhook_url|default|length > 30 ? channel.config_decoded.webhook_url|slice(0, 30) ~ '...' : channel.config_decoded.webhook_url|default }}<br>
+                                Channel: {{ channel.config_decoded.channel|default }}
+                            {% elseif channel.type == 'email' %}
+                                To: {{ channel.config_decoded.to|default }}<br>
+                                From: {{ channel.config_decoded.from|default }}
+                            {% elseif channel.type == 'sms' %}
+                                Phone: {{ channel.config_decoded.phone_number|default }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ app_url }}/config/notification-channels/{{ channel.id }}/edit" class="btn btn-sm btn-outline-primary">Edit</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="alert alert-info">No notification channels configured. Add one to start receiving alerts.</div>
+        {% endif %}
+    </div>
+{% endblock %}

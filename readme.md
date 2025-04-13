@@ -1,6 +1,6 @@
-# CronitorClone UI
+# Cronitorex UI
 
-A simple PHP application to display CronitorClone logs in a user-friendly interface.
+A simple PHP application to display Cronitorex logs in a user-friendly interface.
 
 ## Requirements
 

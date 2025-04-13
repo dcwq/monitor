@@ -1,0 +1,104 @@
+{# templates/config/add_channel.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Add Notification Channel - Cronitorex{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Add Notification Channel</h1>
+
+        <form method="post">
+            <div class="form-group mb-3">
+                <label for="name">Channel Name:</label>
+                <input type="text" id="name" name="name" required class="form-control">
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="type">Channel Type:</label>
+                <select id="type" name="type" required class="form-select">
+                    <option value="">Select a type</option>
+                    <option value="slack">Slack</option>
+                    <option value="email">Email</option>
+                    <option value="sms">SMS</option>
+                </select>
+            </div>
+
+            {# Slack config fields #}
+            <div id="slack-config" class="channel-config" style="display: none;">
+                <div class="form-group mb-3">
+                    <label for="webhook_url">Webhook URL:</label>
+                    <input type="url" id="webhook_url" name="webhook_url" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="username">Bot Username:</label>
+                    <input type="text" id="username" name="username" value="Cronitorex" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="icon_emoji">Icon Emoji:</label>
+                    <input type="text" id="icon_emoji" name="icon_emoji" value=":warning:" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="channel">Channel:</label>
+                    <input type="text" id="channel" name="channel" placeholder="#general" class="form-control">
+                </div>
+            </div>
+
+            {# Email config fields #}
+            <div id="email-config" class="channel-config" style="display: none;">
+                <div class="form-group mb-3">
+                    <label for="to">To Email:</label>
+                    <input type="email" id="to" name="to" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="from">From Email:</label>
+                    <input type="email" id="from" name="from" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="subject">Subject Prefix:</label>
+                    <input type="text" id="subject" name="subject" value="Cronitorex Alert" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="cc">CC (optional):</label>
+                    <input type="email" id="cc" name="cc" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="bcc">BCC (optional):</label>
+                    <input type="email" id="bcc" name="bcc" class="form-control">
+                </div>
+            </div>
+
+            {# SMS config fields #}
+            <div id="sms-config" class="channel-config" style="display: none;">
+                <div class="form-group mb-3">
+                    <label for="phone_number">Phone Number:</label>
+                    <input type="text" id="phone_number" name="phone_number" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="api_key">API Key:</label>
+                    <input type="text" id="api_key" name="api_key" class="form-control">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Add Channel</button>
+            <a href="{{ app_url }}/config/notification-channels" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const typeSelect = document.getElementById('type');
+            const configDivs = document.querySelectorAll('.channel-config');
+
+            typeSelect.addEventListener('change', function() {
+                // Ukryj wszystkie panele konfiguracyjne
+                configDivs.forEach(div => div.style.display = 'none');
+
+                // Pokaż właściwy panel
+                const selectedType = typeSelect.value;
+                if (selectedType) {
+                    document.getElementById(selectedType + '-config').style.display = 'block';
+                }
+            });
+        });
+    </script>
+{% endblock %}

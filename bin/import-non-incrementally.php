@@ -15,7 +15,7 @@ echo "Starting log import...\n";
 // Parse history log
 $historyParser = new LogParser();
 try {
-    $historyImportCount = $historyParser->parse(true);
+    $historyImportCount = $historyParser->parse(false);
     echo "Successfully imported {$historyImportCount} history log entries.\n";
 } catch (Exception $e) {
     echo "Error importing history log: " . $e->getMessage() . "\n";
@@ -24,7 +24,7 @@ try {
 // Parse API log
 $apiParser = new ApiLogParser();
 try {
-    $apiImportCount = $apiParser->parse(true);
+    $apiImportCount = $apiParser->parse(false);
     echo "Successfully imported {$apiImportCount} API log entries.\n";
 } catch (Exception $e) {
     echo "Error importing API log: " . $e->getMessage() . "\n";

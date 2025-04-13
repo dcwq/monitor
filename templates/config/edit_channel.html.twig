@@ -1,0 +1,74 @@
+{# templates/config/edit_channel.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Edit {{ channel.name }} - Cronitorex{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Edit Notification Channel</h1>
+
+        <form method="post">
+            <div class="form-group mb-3">
+                <label for="name">Channel Name:</label>
+                <input type="text" id="name" name="name" value="{{ channel.name }}" required class="form-control">
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="type">Channel Type:</label>
+                <input type="text" value="{{ channel.type|capitalize }}" class="form-control" readonly>
+            </div>
+
+            {% if channel.type == 'slack' %}
+                <div class="form-group mb-3">
+                    <label for="webhook_url">Webhook URL:</label>
+                    <input type="url" id="webhook_url" name="webhook_url" value="{{ config.webhook_url }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="username">Bot Username:</label>
+                    <input type="text" id="username" name="username" value="{{ config.username ?? 'Cronitorex' }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="icon_emoji">Icon Emoji:</label>
+                    <input type="text" id="icon_emoji" name="icon_emoji" value="{{ config.icon_emoji ?? ':warning:' }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="channel">Channel:</label>
+                    <input type="text" id="channel" name="channel" value="{{ config.channel ?? '' }}" placeholder="#general" class="form-control">
+                </div>
+            {% elseif channel.type == 'email' %}
+                <div class="form-group mb-3">
+                    <label for="to">To Email:</label>
+                    <input type="email" id="to" name="to" value="{{ config.to }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="from">From Email:</label>
+                    <input type="email" id="from" name="from" value="{{ config.from }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="subject">Subject Prefix:</label>
+                    <input type="text" id="subject" name="subject" value="{{ config.subject ?? 'Cronitorex Alert' }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="cc">CC (optional):</label>
+                    <input type="email" id="cc" name="cc" value="{{ config.cc ?? '' }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="bcc">BCC (optional):</label>
+                    <input type="email" id="bcc" name="bcc" value="{{ config.bcc ?? '' }}" class="form-control">
+                </div>
+            {% elseif channel.type == 'sms' %}
+                <div class="form-group mb-3">
+                    <label for="phone_number">Phone Number:</label>
+                    <input type="text" id="phone_number" name="phone_number" value="{{ config.phone_number }}" class="form-control">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="api_key">API Key:</label>
+                    <input type="text" id="api_key" name="api_key" value="{{ config.api_key }}" class="form-control">
+                </div>
+            {% endif %}
+
+            <button type="submit" class="btn btn-primary">Update Channel</button>
+            <a href="{{ app_url }}/config/notification-channels" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+{% endblock %}

@@ -62,14 +62,17 @@ class LogParser
         return $importCount;
     }
 
-    private function processPing(array $pingData): void
-    {
+    private function processPing(array $pingData): void {
         $monitorName = $pingData['monitor'];
+        $projectName = $pingData['project'] ?? null;
 
         $monitor = Monitor::findByName($monitorName);
-
         if ($monitor === null) {
-            $monitor = new Monitor($monitorName);
+            $monitor = new Monitor($monitorName, $projectName);
+            $monitor->save();
+        } else if ($projectName && $monitor->project_name !== $projectName) {
+            // Aktualizuj nazwę projektu, jeśli się zmieniła
+            $monitor->project_name = $projectName;
             $monitor->save();
         }
 

@@ -1,0 +1,57 @@
+{# templates/monitor/overdue_history.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Overdue History: {{ monitor.name }} - Cronitorex{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Overdue History: {{ monitor.name }}</h1>
+
+        <div class="mb-3">
+            <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-outline-secondary">Back to Monitor</a>
+        </div>
+
+        {% if history|length > 0 %}
+            <table class="table table-striped">
+                <thead>
+                <tr>
+                    <th>Started</th>
+                    <th>Resolved</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for item in history %}
+                    <tr>
+                        <td>{{ item.started_at }}</td>
+                        <td>{{ item.resolved_at ? item.resolved_at : 'Not resolved' }}</td>
+                        <td>
+                            {% if item.duration %}
+                                {% if item.duration < 60 %}
+                                    {{ item.duration }} seconds
+                                {% elseif item.duration < 3600 %}
+                                    {{ (item.duration / 60)|round(1) }} minutes
+                                {% else %}
+                                    {{ (item.duration / 3600)|round(1) }} hours
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.is_resolved %}
+                                <span class="badge bg-success">Resolved</span>
+                            {% else %}
+                                <span class="badge bg-danger">Unresolved</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="alert alert-info">No overdue events have been recorded for this monitor.</div>
+        {% endif %}
+    </div>
+{% endblock %}

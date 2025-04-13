@@ -4,6 +4,7 @@ namespace App;
 
 use App\Models\Monitor;
 use App\Models\Ping;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -14,6 +15,26 @@ class MonitorController
     public function __construct(\Twig\Environment $twig)
     {
         $this->twig = $twig;
+    }
+
+    public function edit(Request $request, int $id): Response {
+        $monitor = Monitor::findById($id);
+        if (!$monitor) {
+            return new Response('Monitor not found', 404);
+        }
+
+        if ($request->isMethod('POST')) {
+            $monitor->name = $request->request->get('name');
+            $monitor->project_name = $request->request->get('project_name');
+
+            if ($monitor->save()) {
+                return new RedirectResponse($this->generateUrl('monitor_show', ['id' => $monitor->id]));
+            }
+        }
+
+        return new Response($this->twig->render('monitor/edit.html.twig', [
+            'monitor' => $monitor
+        ]));
     }
     
     public function show(Request $request, int $id): Response

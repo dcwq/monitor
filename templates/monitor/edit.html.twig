@@ -1,0 +1,23 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Edit {{ monitor.name }} - Cronitorex{% endblock %}
+
+{% block content %}
+    <h1>Edit Monitor: {{ monitor.name }}</h1>
+
+    <form method="post">
+        <div class="form-group">
+            <label for="name">Monitor Name:</label>
+            <input type="text" id="name" name="name" value="{{ monitor.name }}" required class="form-control">
+        </div>
+
+        <div class="form-group">
+            <label for="project_name">Project Name:</label>
+            <input type="text" id="project_name" name="project_name" value="{{ monitor.project_name }}" class="form-control">
+            <small class="form-text text-muted">Optional. Used for grouping related monitors.</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-secondary">Cancel</a>
+    </form>
+{% endblock %}

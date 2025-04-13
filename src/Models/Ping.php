@@ -19,22 +19,23 @@ class Ping
     public ?string $ip = null;
     public ?string $error = null;
     public array $tags = [];
-    
+
     public function save(): bool
     {
         $db = Connection::getInstance();
-        
+
+        // Sprawdź czy to jest nowy ping
         if ($this->id === null) {
             $stmt = $db->prepare('
-                INSERT INTO pings (
-                    monitor_id, unique_id, state, duration, exit_code, 
-                    host, timestamp, received_at, ip, error
-                ) VALUES (
-                    :monitor_id, :unique_id, :state, :duration, :exit_code, 
-                    :host, :timestamp, :received_at, :ip, :error
-                )
-            ');
-            
+            INSERT INTO pings (
+                monitor_id, unique_id, state, duration, exit_code, host, 
+                timestamp, received_at, ip, error
+            ) VALUES (
+                :monitor_id, :unique_id, :state, :duration, :exit_code, :host,
+                :timestamp, :received_at, :ip, :error
+            )
+        ');
+
             $result = $stmt->execute([
                 'monitor_id' => $this->monitor_id,
                 'unique_id' => $this->unique_id,
@@ -47,21 +48,60 @@ class Ping
                 'ip' => $this->ip,
                 'error' => $this->error,
             ]);
-            
+
             if ($result) {
                 $this->id = (int)$db->lastInsertId();
-                
+
+                // Obsłuż tagi
                 if (!empty($this->tags)) {
                     $this->saveTags();
                 }
-                
+
+                // Sprawdź czy trzeba wysłać powiadomienia
+                $this->checkForStateChanges();
+
                 return true;
             }
-            
             return false;
         }
-        
+
+        // Aktualizacja nie jest obsługiwana
         return false;
+    }
+
+    private function checkForStateChanges(): void
+    {
+        try {
+            // Pobierz poprzedni ping dla tego monitora
+            $previousPings = self::findRecentByMonitor($this->monitor_id, 2);
+
+            // Usuń obecny ping z listy (jeśli jest)
+            $previousPings = array_filter($previousPings, function($ping) {
+                return $ping->id !== $this->id;
+            });
+
+            $previousPing = reset($previousPings); // Pobierz pierwszy element (lub false jeśli pusta tablica)
+
+            // Jeśli jest to pierwszy ping dla monitora, nie ma potrzeby sprawdzania zmiany stanu
+            if (!$previousPing) {
+                return;
+            }
+
+            $notificationService = new \App\Services\NotificationService();
+
+            // Sprawdź, czy wystąpiło zdarzenie niepowodzenia
+            if ($this->state === 'fail' && $previousPing->state !== 'fail') {
+                $notificationService->handleMonitorFail($this->monitor_id, $this->error ?? '');
+            }
+
+            // Sprawdź, czy wystąpiło zdarzenie naprawy
+            if ($this->state === 'complete' && $previousPing->state === 'fail') {
+                $notificationService->handleMonitorResolve($this->monitor_id);
+            }
+        } catch (\Exception $e) {
+            // Log błędu, ale nie zakłócaj głównego procesu
+            error_log("Error checking for state changes: " . $e->getMessage());
+        }
     }
     
     private function saveTags(): void

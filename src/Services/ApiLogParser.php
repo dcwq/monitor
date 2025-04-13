@@ -83,7 +83,7 @@ class ApiLogParser
             $db = Connection::getInstance();
 
             // Najpierw sprawdzamy czy monitor istnieje
-            $stmtMonitor = $db->prepare('SELECT id FROM monitors WHERE name = ?');
+            $stmtMonitor = $db->prepare('SELECT id, project_name FROM monitors WHERE name = ?');
             $stmtMonitor->execute([$monitorName]);
             $monitorData = $stmtMonitor->fetch(PDO::FETCH_ASSOC);
 

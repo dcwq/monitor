@@ -1,0 +1,39 @@
+{# templates/config/monitor_config.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Configure {{ monitor.name }} - Cronitorex{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Configure Monitor: {{ monitor.name }}</h1>
+
+        <form method="post">
+            <div class="form-group mb-3">
+                <label for="project_name">Project Name:</label>
+                <input type="text" id="project_name" name="project_name" value="{{ monitor.project_name }}" class="form-control">
+                <small class="form-text text-muted">Optional. Used for grouping related monitors.</small>
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="expected_interval">Expected Interval (seconds):</label>
+                <input type="number" id="expected_interval" name="expected_interval" value="{{ config.expected_interval }}" min="1" class="form-control">
+                <small class="form-text text-muted">How often should this monitor ping? (in seconds)</small>
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="alert_threshold">Alert Threshold (seconds):</label>
+                <input type="number" id="alert_threshold" name="alert_threshold" value="{{ config.alert_threshold }}" min="0" class="form-control">
+                <small class="form-text text-muted">How long after missing a ping should we alert? (0 for immediate)</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save Configuration</button>
+            <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-secondary">Cancel</a>
+        </form>
+
+        <div class="mt-4">
+            <h3>Notification Settings</h3>
+            <p>Configure which notification channels to use for this monitor:</p>
+            <a href="{{ app_url }}/monitors/{{ monitor.id }}/notifications" class="btn btn-outline-primary">Manage Notifications</a>
+        </div>
+    </div>
+{% endblock %}

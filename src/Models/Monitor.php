@@ -9,103 +9,136 @@ class Monitor
 {
     public ?int $id = null;
     public string $name;
-    
-    public function __construct(string $name = '')
-    {
+    public ?string $project_name = null;
+
+    public function __construct(string $name, ?string $project_name = null) {
         $this->name = $name;
+        $this->project_name = $project_name;
     }
-    
-    public function save(): bool
-    {
+
+    public function save(): bool {
         $db = Connection::getInstance();
-        
+
         if ($this->id === null) {
             $stmt = $db->prepare('
-                INSERT INTO monitors (name)
-                VALUES (:name)
-                ON DUPLICATE KEY UPDATE
-                    name = :name
+                INSERT INTO monitors (name, project_name) 
+                VALUES (:name, :project_name) 
+                ON DUPLICATE KEY UPDATE name = :name, project_name = :project_name
             ');
-            
+
             $stmt->execute([
-                'name' => $this->name
+                'name' => $this->name,
+                'project_name' => $this->project_name
             ]);
-            
+
             $this->id = (int)$db->lastInsertId();
-            
+            return $stmt->rowCount() > 0;
+        } else {
+            $stmt = $db->prepare('
+                UPDATE monitors 
+                SET name = :name, project_name = :project_name 
+                WHERE id = :id
+            ');
+
+            $stmt->execute([
+                'id' => $this->id,
+                'name' => $this->name,
+                'project_name' => $this->project_name
+            ]);
+
             return $stmt->rowCount() > 0;
         }
-        
-        return false;
     }
-    
-    public static function findByName(string $name): ?self
-    {
+
+    // Zaktualizuj metody wyszukiwania, aby uwzględniały nowe pole
+    public static function findByName(string $name): ?self {
         $db = Connection::getInstance();
-        
         $stmt = $db->prepare('
-            SELECT id, name
-            FROM monitors
+            SELECT id, name, project_name 
+            FROM monitors 
             WHERE name = :name
         ');
-        
         $stmt->execute(['name' => $name]);
-        
         $data = $stmt->fetch();
-        
+
         if (!$data) {
             return null;
         }
-        
-        $monitor = new self($data['name']);
+
+        $monitor = new self($data['name'], $data['project_name']);
         $monitor->id = (int)$data['id'];
-        
         return $monitor;
     }
-    
-    public static function findById(int $id): ?self
-    {
+
+    public static function findById(int $id): ?self {
         $db = Connection::getInstance();
-        
         $stmt = $db->prepare('
-            SELECT id, name
-            FROM monitors
+            SELECT id, name, project_name 
+            FROM monitors 
             WHERE id = :id
         ');
-        
         $stmt->execute(['id' => $id]);
-        
         $data = $stmt->fetch();
-        
+
         if (!$data) {
             return null;
         }
-        
-        $monitor = new self($data['name']);
+
+        $monitor = new self($data['name'], $data['project_name']);
         $monitor->id = (int)$data['id'];
-        
         return $monitor;
     }
-    
-    public static function findAll(): array
-    {
+
+    public static function findAll(): array {
         $db = Connection::getInstance();
-        
         $stmt = $db->query('
-            SELECT id, name
-            FROM monitors
-            ORDER BY name
+            SELECT id, name, project_name 
+            FROM monitors 
+            ORDER BY project_name, name
         ');
-        
+
         $monitors = [];
-        
         while ($data = $stmt->fetch()) {
-            $monitor = new self($data['name']);
+            $monitor = new self($data['name'], $data['project_name']);
             $monitor->id = (int)$data['id'];
             $monitors[] = $monitor;
         }
-        
+
         return $monitors;
+    }
+
+    // Metoda do wyszukiwania monitorów według nazwy projektu
+    public static function findByProjectName(string $projectName): array {
+        $db = Connection::getInstance();
+        $stmt = $db->prepare('
+            SELECT id, name, project_name 
+            FROM monitors 
+            WHERE project_name = :project_name
+            ORDER BY name
+        ');
+        $stmt->execute(['project_name' => $projectName]);
+
+        $monitors = [];
+        while ($data = $stmt->fetch()) {
+            $monitor = new self($data['name'], $data['project_name']);
+            $monitor->id = (int)$data['id'];
+            $monitors[] = $monitor;
+        }
+
+        return $monitors;
+    }
+
+    // Metoda do pobierania wszystkich unikalnych nazw projektów
+    public static function getAllProjectNames(): array {
+        $db = Connection::getInstance();
+        $stmt = $db->query('
+            SELECT DISTINCT project_name 
+            FROM monitors 
+            WHERE project_name IS NOT NULL 
+            ORDER BY project_name
+        ');
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
     
     public function getRecentPings(int $limit = 10): array
