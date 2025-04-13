@@ -135,7 +135,7 @@ class ApiLogParser
 
     private function getLastProcessedTimestamp(): ?string
     {
-        $file = sys_get_temp_dir() . '/cronitor_clone_api_last_processed.txt';
+        $file = LogParser::LAST_PROCESSED_FILE;
 
         if (file_exists($file)) {
             return trim(file_get_contents($file));
@@ -146,7 +146,7 @@ class ApiLogParser
 
     private function saveLastProcessedTimestamp(string $timestamp): void
     {
-        $file = sys_get_temp_dir() . '/cronitor_clone_api_last_processed.txt';
+        $file = LogParser::LAST_PROCESSED_FILE;
         file_put_contents($file, $timestamp);
     }
 }

@@ -4,6 +4,8 @@
 # Autor: Claude
 # Data: 2025-04-13
 
+export TZ="Europe/Warsaw"
+
 # ========== KONFIGURACJA ==========
 VERSION="0.3.0"
 CONFIG_FILE="${HOME}/.cronitor-clone.json"

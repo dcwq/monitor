@@ -12,6 +12,8 @@ use App\Repository\TagRepositoryInterface;
 
 class LogParser
 {
+    public const LAST_PROCESSED_FILE = './data/last_processed.txt';
+
     private string $historyLogPath;
     private ?string $lastProcessedLine = null;
     private MonitorRepositoryInterface $monitorRepository;
@@ -28,6 +30,11 @@ class LogParser
         $this->pingRepository = $pingRepository;
         $this->tagRepository = $tagRepository;
         $this->historyLogPath = $historyLogPath ?? $_ENV['HISTORY_LOG'];
+
+        if (!file_exists(self::LAST_PROCESSED_FILE)) {
+            touch(self::LAST_PROCESSED_FILE);
+            chmod(self::LAST_PROCESSED_FILE, 0777);
+        }
     }
 
     public function parse(bool $incrementally = true): int
@@ -129,7 +136,7 @@ class LogParser
 
     private function getLastProcessedTimestamp(): ?string
     {
-        $file = sys_get_temp_dir() . '/cronitor_clone_last_processed.txt';
+        $file = self::LAST_PROCESSED_FILE;
 
         if (file_exists($file)) {
             return trim(file_get_contents($file));
@@ -140,7 +147,7 @@ class LogParser
 
     private function saveLastProcessedTimestamp(string $timestamp): void
     {
-        $file = sys_get_temp_dir() . '/cronitor_clone_last_processed.txt';
+        $file = self::LAST_PROCESSED_FILE;
         file_put_contents($file, $timestamp);
     }
 }

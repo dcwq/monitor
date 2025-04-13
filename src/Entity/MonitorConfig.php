@@ -28,6 +28,20 @@ class MonitorConfig
     #[ORM\Column(type: Types::INTEGER)]
     private int $alert_threshold;
 
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $cron_expression = null;
+
+    public function getCronExpression(): ?string
+    {
+        return $this->cron_expression;
+    }
+
+    public function setCronExpression(?string $cron_expression): self
+    {
+        $this->cron_expression = $cron_expression;
+        return $this;
+    }
+
     public function __construct(
         Monitor $monitor,
         int $expected_interval = self::DEFAULT_EXPECTED_INTERVAL,

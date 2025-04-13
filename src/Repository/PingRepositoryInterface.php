@@ -16,4 +16,9 @@ interface PingRepositoryInterface
     public function save(Ping $ping): void;
 
     public function remove(Ping $ping): void;
+
+    public function countByMonitor(int $monitorId, ?string $state = null): int;
+    public function findRecentByMonitorWithPagination(int $monitorId, int $limit = 10, int $offset = 0, ?string $state = null): array;
+
+
 }

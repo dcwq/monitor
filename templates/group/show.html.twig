@@ -42,7 +42,7 @@
                                         <span class="badge {{ lastPing.state == 'complete' ? 'bg-success' : (lastPing.state == 'run' ? 'bg-primary' : 'bg-danger') }}">
                                         {{ lastPing.state|capitalize }}
                                     </span>
-                                        <small class="text-muted">{{ lastPing.timestamp|date('Y-m-d H:i') }}</small>
+                                        <small class="text-muted">{{ lastPing.getFormattedTimestamp() }}</small>
                                     {% else %}
                                         <span class="badge bg-secondary">No pings</span>
                                     {% endif %}

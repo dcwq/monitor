@@ -91,14 +91,14 @@
                     <div class="col-6">
                         <span class="d-block text-muted small">Last Event</span>
                         {% if lastPing %}
-                        <span class="fw-medium">{{ lastPing.timestamp|date('g') }} hour{{ lastPing.timestamp|date('g') != 1 ? 's' : '' }} ago</span>
+                        <span class="fw-medium">{{ lastPing.ago() }}</span>
                         {% else %}
                         <span class="fw-medium">-</span>
                         {% endif %}
                     </div>
                     <div class="col-6">
                         <span class="d-block text-muted small">Last Issue</span>
-                        <span class="fw-medium">-</span>
+                        <span class="fw-medium">{{ stats.lastIssue ?: '-' }}</span>
                     </div>
                 </div>
 

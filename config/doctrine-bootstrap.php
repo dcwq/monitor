@@ -6,6 +6,9 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\ORMSetup;
 use Dotenv\Dotenv;
 
+// Ustawienie domyślnej strefy czasowej dla aplikacji
+date_default_timezone_set('Europe/Warsaw');
+
 require_once __DIR__ . '/../vendor/autoload.php';
 
 $dotenv = Dotenv::createImmutable(dirname(__DIR__));
@@ -29,7 +32,11 @@ $connectionParams = [
     'password' => $_ENV['DB_PASS'],
     'host' => $_ENV['DB_HOST'],
     'driver' => 'pdo_mysql',
-    'charset' => 'utf8mb4'
+    'charset' => 'utf8mb4',
+    'driverOptions' => [
+        // Ustaw opcję, aby PDO używało strefę czasową PHP
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+01:00'"
+    ]
 ];
 
 // Getting the EntityManager

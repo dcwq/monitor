@@ -50,9 +50,17 @@ class ConfigController
         $config = $this->monitorConfigRepository->getOrCreate($monitor);
 
         if ($request->isMethod('POST')) {
-            // Update config
-            $config->setExpectedInterval((int)$request->request->get('expected_interval', MonitorConfig::DEFAULT_EXPECTED_INTERVAL));
-            $config->setAlertThreshold((int)$request->request->get('alert_threshold', MonitorConfig::DEFAULT_ALERT_THRESHOLD));
+            // Dodaj debugowanie
+            error_log('POST data: ' . print_r($request->request->all(), true));
+
+            // Update config - użyj get z domyślną wartością, ale już nie przekazuj domyślnej wartości do setterów
+            $expectedInterval = (int)$request->request->get('expected_interval', MonitorConfig::DEFAULT_EXPECTED_INTERVAL);
+            $alertThreshold = (int)$request->request->get('alert_threshold', MonitorConfig::DEFAULT_ALERT_THRESHOLD);
+
+            error_log("Setting expected_interval: $expectedInterval, alert_threshold: $alertThreshold");
+
+            $config->setExpectedInterval($expectedInterval);
+            $config->setAlertThreshold($alertThreshold);
             $this->monitorConfigRepository->save($config);
 
             // Update monitor project

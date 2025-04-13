@@ -251,4 +251,44 @@ class Ping
             error_log("Error checking for state changes: " . $e->getMessage());
         }
     }
+
+    public function getFormattedTimestamp(string $format = 'Y-m-d H:i:s'): string
+    {
+        $date = new \DateTime();
+        $date->setTimestamp($this->timestamp);
+        return $date->format($format);
+    }
+
+    public function ago() {
+
+        $when = $this->getTimestamp();
+
+        $diff = date("U") - $when;
+
+        // Days
+        $day = floor($diff / 86400);
+        $diff = $diff - ($day * 86400);
+
+        // Hours
+        $hrs = floor($diff / 3600);
+        $diff = $diff - ($hrs * 3600);
+
+        // Mins
+        $min = floor($diff / 60);
+        $diff = $diff - ($min * 60);
+
+        // Secs
+        $sec = $diff;
+
+        // Return how long ago this was. eg: 3d 17h 4m 18s ago
+        // Skips left fields if they aren't necessary, eg. 16h 0m 27s ago / 10m 7s ago
+        $str = sprintf("%s%s%s%s",
+            $day != 0 ? $day."d " : "",
+            ($day != 0 || $hrs != 0) ? $hrs."h " : "",
+            ($day != 0 || $hrs != 0 || $min != 0) ? $min."m " : "",
+            $sec."s ago"
+        );
+
+        return $str;
+    }
 }

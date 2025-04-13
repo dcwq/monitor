@@ -16,7 +16,7 @@
                         <i class="bi bi-arrow-repeat text-secondary me-2"></i>
                         <div>
                             <div>Execution</div>
-                            <div class="text-muted small">{{ ping.timestamp|date('m/d/Y, h:i:s a') }} UTC</div>
+                            <div class="text-muted small">{{ ping.getFormattedTimestamp() }} UTC</div>
                         </div>
                     </div>
                 </td>
@@ -33,9 +33,15 @@
     </table>
 </div>
 <div class="card-footer d-flex justify-content-between align-items-center">
-    <div>Showing 1 to {{ pings|length }} of {{ pings|length }} results</div>
+    <div>Showing {{ ((page - 1) * limit) + 1 }} to {{ min((page * limit), total) }} of {{ total }} results</div>
     <div>
-        <button class="btn btn-sm btn-outline-secondary disabled">Previous</button>
-        <button class="btn btn-sm btn-outline-secondary ms-2 disabled">Next</button>
+        <a href="{{ app_url }}/monitors/{{ monitor.id }}/latest-activity?page={{ page - 1 }}&limit={{ limit }}"
+           class="btn btn-sm btn-outline-secondary {{ page <= 1 ? 'disabled' : '' }}">
+            Previous
+        </a>
+        <a href="{{ app_url }}/monitors/{{ monitor.id }}/latest-activity?page={{ page + 1 }}&limit={{ limit }}"
+           class="btn btn-sm btn-outline-secondary ms-2 {{ page >= maxPage ? 'disabled' : '' }}">
+            Next
+        </a>
     </div>
 </div>

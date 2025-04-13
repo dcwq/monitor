@@ -19,6 +19,12 @@
             </div>
 
             <div class="form-group mb-3">
+                <label for="cron_expression">CRON Expression (optional):</label>
+                <input type="text" id="cron_expression" name="cron_expression" value="{{ config.cronExpression }}" class="form-control">
+                <small class="form-text text-muted">If set, overrides Expected Interval. Format: * * * * * (minute hour day-of-month month day-of-week)</small>
+            </div>
+
+            <div class="form-group mb-3">
                 <label for="group_id">Group:</label>
                 <select id="group_id" name="group_id" class="form-select">
                     <option value="">-- None --</option>

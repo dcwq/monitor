@@ -125,4 +125,38 @@ class DoctrinePingRepository extends ServiceEntityRepository implements PingRepo
         $this->entityManager->remove($ping);
         $this->entityManager->flush();
     }
+
+    public function countByMonitor(int $monitorId, ?string $state = null): int
+    {
+        $qb = $this->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->where('p.monitor = :monitor_id')
+            ->setParameter('monitor_id', $monitorId);
+
+        if ($state !== null) {
+            $qb->andWhere('p.state = :state')
+                ->setParameter('state', $state);
+        }
+
+        return (int)$qb->getQuery()->getSingleScalarResult();
+    }
+
+    public function findRecentByMonitorWithPagination(int $monitorId, int $limit = 10, int $offset = 0, ?string $state = null): array
+    {
+        $qb = $this->createQueryBuilder('p')
+            ->join('p.monitor', 'm')
+            ->where('m.id = :monitor_id')
+            ->setParameter('monitor_id', $monitorId);
+
+        if ($state !== null) {
+            $qb->andWhere('p.state = :state')
+                ->setParameter('state', $state);
+        }
+
+        return $qb->orderBy('p.timestamp', 'DESC')
+            ->setMaxResults($limit)
+            ->setFirstResult($offset)
+            ->getQuery()
+            ->getResult();
+    }
 }

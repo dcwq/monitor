@@ -24,7 +24,24 @@
             </div>
         </div>
     </div>
-    <p class="text-muted">Runs at 08:00 Europe/Warsaw • Next in about 10 hours</p>
+    {% if monitor.config %}
+        <p class="text-muted">
+            {% set interval = monitor.config.expectedInterval %}
+            {% if interval == 3600 %}
+                Runs hourly
+            {% elseif interval == 86400 %}
+                Runs daily
+            {% elseif interval == 604800 %}
+                Runs weekly
+            {% elseif interval < 3600 %}
+                Runs every {{ (interval / 60)|round }} minutes
+            {% else %}
+                Runs every {{ (interval / 3600)|round }} hours
+            {% endif %}
+            • {{ stats.expectedNextRun ?: 'Unknown schedule (next run)' }}
+
+        </p>
+    {% endif %}
 </div>
 
 <div class="row mb-4">
@@ -119,7 +136,7 @@
                                         <i class="bi bi-arrow-repeat text-secondary me-2"></i>
                                         <div>
                                             <div>Execution</div>
-                                            <div class="text-muted small">{{ ping.timestamp|date('m/d/Y, h:i:s a') }} UTC</div>
+                                            <div class="text-muted small">{{ ping.getFormattedTimestamp() }} UTC</div>
                                         </div>
                                     </div>
                                 </td>
@@ -209,19 +226,60 @@
                 </div>
                 <div class="mb-3">
                     <div class="text-muted">Schedule</div>
-                    <div>Every 8 hours</div>
+                    <div>
+                        {% if monitor.config %}
+                            <p class="text-muted">
+                                {% set interval = monitor.config.expectedInterval %}
+                                {% if interval == 3600 %}
+                                    Runs hourly
+                                {% elseif interval == 86400 %}
+                                    Runs daily
+                                {% elseif interval == 604800 %}
+                                    Runs weekly
+                                {% elseif interval < 3600 %}
+                                    Runs every {{ (interval / 60)|round }} minutes
+                                {% else %}
+                                    Runs every {{ (interval / 3600)|round }} hours
+                                {% endif %}
+                            </p>
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="mb-3">
                     <div class="text-muted">Runs at</div>
-                    <div>08:00 Europe/Warsaw</div>
+                    <div>
+                        {% if monitor.config %}
+                            {% set interval = monitor.config.expectedInterval %}
+                            <p class="text-muted">
+                                {% if interval == 3600 %}
+                                    Runs hourly
+                                {% elseif interval == 86400 %}
+                                    Runs daily
+                                {% elseif interval == 604800 %}
+                                    Runs weekly
+                                {% elseif interval < 3600 %}
+                                    Runs every {{ (interval / 60)|round }} minutes
+                                {% else %}
+                                    Runs every {{ (interval / 3600)|round }} hours
+                                {% endif %}
+                                • {{ stats.expectedNextRun ?: 'Unknown schedule' }}
+                            </p>
+                        {% else %}
+                            <p class="text-muted">Schedule not configured</p>
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="mb-3">
                     <div class="text-muted">Platform</div>
-                    <div>Linux cron</div>
+                    <div>
+                        @todo
+                    </div>
                 </div>
                 <div class="mb-3">
                     <div class="text-muted">Server Timezone</div>
-                    <div>Europe/Warsaw</div>
+                    <div>
+                        @todo
+                    </div>
                 </div>
             </div>
         </div>

@@ -118,12 +118,23 @@ class MonitorController
             return new Response('Monitor not found', 404);
         }
 
+        $page = $request->query->getInt('page', 1);
         $limit = $request->query->getInt('limit', 10);
-        $pings = $this->pingRepository->findRecentByMonitor($monitor->getId(), $limit);
+        $offset = ($page - 1) * $limit;
+
+        // Pobierz całkowitą liczbę pingów
+        $totalPings = $this->pingRepository->countByMonitor($id);
+
+        // Pobierz tylko pingi dla bieżącej strony
+        $pings = $this->pingRepository->findRecentByMonitorWithPagination($monitor->getId(), $limit, $offset);
 
         return new Response($this->twig->render('monitor/_latest_activity.html.twig', [
             'monitor' => $monitor,
-            'pings' => $pings
+            'pings' => $pings,
+            'page' => $page,
+            'limit' => $limit,
+            'total' => $totalPings,
+            'maxPage' => ceil($totalPings / $limit)
         ]));
     }
 

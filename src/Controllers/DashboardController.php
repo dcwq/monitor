@@ -3,8 +3,11 @@
 namespace App\Controllers;
 
 use App\Application;
+use App\Entity\Monitor;
+use App\Repository\MonitorConfigRepositoryInterface;
 use App\Repository\MonitorGroupRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
+use App\Repository\PingRepositoryInterface;
 use App\Repository\TagRepositoryInterface;
 use App\Services\ApiLogParser;
 use App\Services\LogParser;
@@ -21,6 +24,10 @@ class DashboardController
     private TagRepositoryInterface $tagRepository;
     private MonitorGroupRepositoryInterface $groupRepository;
 
+    private MonitorConfigRepositoryInterface $monitorConfigRepository;
+
+    private PingRepositoryInterface $pingRepository;
+
     public function __construct(Environment $twig, Application $app, $container)
     {
         $this->twig = $twig;
@@ -29,6 +36,8 @@ class DashboardController
         $this->monitorRepository = $container->get(MonitorRepositoryInterface::class);
         $this->tagRepository = $container->get(TagRepositoryInterface::class);
         $this->groupRepository = $container->get(MonitorGroupRepositoryInterface::class);
+        $this->monitorConfigRepository = $container->get(MonitorConfigRepositoryInterface::class);
+        $this->pingRepository = $container->get(PingRepositoryInterface::class);
     }
 
     public function index(Request $request): Response {
@@ -79,7 +88,8 @@ class DashboardController
                 'failingCount' => $failingCount,
                 'healthPercentage' => $totalCount > 0 ? ($healthyCount / $totalCount) * 100 : 0,
                 'tags' => $monitorTags,
-                'expectedNextRun' => $this->calculateExpectedNextRun($recentPings->toArray())
+                'expectedNextRun' => $this->calculateExpectedNextRun($recentPings->toArray()),
+                'lastIssue' => $this->getLastIssueInfo($monitor)
             ];
         }
 
@@ -129,49 +139,34 @@ class DashboardController
             return null;
         }
 
-        $intervals = [];
-        $lastTimestamp = null;
-
-        // Sort pings by timestamp ascending
+        // Posortuj pingi malejąco (nowsze pierwsze)
         usort($pings, function ($a, $b) {
-            return $a->getTimestamp() - $b->getTimestamp();
+            return $b->getTimestamp() - $a->getTimestamp();
         });
 
-        foreach ($pings as $ping) {
-            if ($ping->getState() === 'run' && $lastTimestamp !== null) {
-                $interval = $ping->getTimestamp() - $lastTimestamp;
+        // Weź najświeższy ping
+        $lastPing = $pings[0];
 
-                if ($interval > 0) {
-                    $intervals[] = $interval;
-                }
-            }
-
-            if ($ping->getState() === 'run') {
-                $lastTimestamp = $ping->getTimestamp();
-            }
-        }
-
-        if (empty($intervals)) {
+        // Pobierz konfigurację monitora
+        $config = $this->monitorConfigRepository->findByMonitor($lastPing->getMonitor());
+        if (!$config) {
             return null;
         }
 
-        // Calculate median interval
-        sort($intervals);
-        $count = count($intervals);
-        $middle = floor($count / 2);
+        // Użyj skonfigurowanego interwału zamiast wyliczania mediany
+        $expectedInterval = $config->getExpectedInterval();
 
-        $medianInterval = ($count % 2 === 0)
-            ? ($intervals[$middle - 1] + $intervals[$middle]) / 2
-            : $intervals[$middle];
+        // Oblicz oczekiwany czas następnego uruchomienia
+        $expectedNext = $lastPing->getTimestamp() + $expectedInterval;
 
-        $lastRun = end($pings)->getTimestamp();
-        $expectedNext = $lastRun + $medianInterval;
+        // Obecny czas
+        $now = time();
 
-        if ($expectedNext < time()) {
+        if ($expectedNext < $now) {
             return 'Overdue';
         }
 
-        $minutesRemaining = ceil(($expectedNext - time()) / 60);
+        $minutesRemaining = ceil(($expectedNext - $now) / 60);
 
         if ($minutesRemaining < 60) {
             return "In about {$minutesRemaining} minute" . ($minutesRemaining === 1 ? '' : 's');
@@ -179,5 +174,29 @@ class DashboardController
 
         $hoursRemaining = ceil($minutesRemaining / 60);
         return "In about {$hoursRemaining} hour" . ($hoursRemaining === 1 ? '' : 's');
+    }
+
+    private function getLastIssueInfo(Monitor $monitor): ?string {
+        $failedPings = $this->pingRepository->findRecentByMonitor($monitor->getId(), 1, 'fail');
+
+        if (empty($failedPings)) {
+            return null;
+        }
+
+        $lastFailedPing = $failedPings[0];
+        $diff = time() - $lastFailedPing->getTimestamp();
+
+        if ($diff < 60) {
+            return "Just now";
+        } elseif ($diff < 3600) {
+            $minutes = floor($diff / 60);
+            return "$minutes minute" . ($minutes === 1 ? '' : 's') . " ago";
+        } elseif ($diff < 86400) {
+            $hours = floor($diff / 3600);
+            return "$hours hour" . ($hours === 1 ? '' : 's') . " ago";
+        } else {
+            $days = floor($diff / 86400);
+            return "$days day" . ($days === 1 ? '' : 's') . " ago";
+        }
     }
 }

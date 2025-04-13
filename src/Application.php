@@ -174,4 +174,15 @@ class Application
     {
         return $this->container;
     }
+
+    public function generateUrlWithParams(string $routeName, array $parameters = [], array $queryParams = []): string
+    {
+        $url = $this->generateUrl($routeName, $parameters);
+
+        if (!empty($queryParams)) {
+            $url .= '?' . http_build_query($queryParams);
+        }
+
+        return $url;
+    }
 }

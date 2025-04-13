@@ -35,6 +35,13 @@ $managerRegistry = new \App\Persistence\SimpleManagerRegistry($entityManager);
 // Prepare service definitions
 $serviceDefinitions = [];
 
+set_error_handler(function($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) {
+        return;
+    }
+    throw new \ErrorException($message, 0, $severity, $file, $line);
+});
+
 // Simple service container
 $container = new class($serviceDefinitions) {
     private array $definitions;
