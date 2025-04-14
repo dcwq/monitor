@@ -14,10 +14,40 @@
                 <small class="form-text text-muted">Optional. Used for grouping related monitors.</small>
             </div>
 
+            {% if cronSchedule %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Detected CRON Schedule:</strong> <code>{{ cronSchedule }}</code>
+                    <p class="mb-0 mt-2">This monitor runs as a cron job with the schedule above.
+                        The expected interval is automatically calculated based on this schedule.</p>
+                </div>
+            {% endif %}
+
+            <div class="form-group mb-3">
+                <label for="cron_expression">CRON Expression:</label>
+                <input type="text" id="cron_expression" name="cron_expression" value="{{ config.cronExpression }}" class="form-control"
+                       {% if cronSchedule %}placeholder="{{ cronSchedule }}"{% endif %}>
+                <small class="form-text text-muted">
+                    Optional. Format: <code>* * * * *</code> (minute hour day-of-month month day-of-week)
+                    {% if cronSchedule %}
+                        <br>Leave empty to use the automatically detected schedule from the cron job.
+                    {% endif %}
+                </small>
+            </div>
+
             <div class="form-group mb-3">
                 <label for="expected_interval">Expected Interval (seconds):</label>
-                <input type="number" id="expected_interval" name="expected_interval" value="{{ config.expectedInterval }}" min="1" class="form-control">
-                <small class="form-text text-muted">How often should this monitor ping? (in seconds)</small>
+                <input type="number" id="expected_interval" name="expected_interval" value="{{ config.expectedInterval }}" min="1" class="form-control"
+                       {% if cronSchedule %}placeholder="Auto-calculated from CRON"{% endif %}>
+                <small class="form-text text-muted">
+                    How often should this monitor ping? (in seconds)
+                    {% if readableInterval %}
+                        <br>Current setting: <strong>{{ readableInterval }}</strong>
+                    {% endif %}
+                    {% if cronSchedule %}
+                        <br>This value is automatically calculated based on the CRON schedule.
+                    {% endif %}
+                </small>
             </div>
 
             <div class="form-group mb-3">

@@ -10,6 +10,9 @@ use App\Repository\MonitorConfigRepositoryInterface;
 use App\Repository\MonitorOverdueHistoryRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
 use App\Repository\NotificationChannelRepositoryInterface;
+use App\Repository\PingRepositoryInterface;
+use App\Services\CronIntervalCalculator;
+use App\Services\MonitorSchedulerService;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -25,7 +28,9 @@ class ConfigController
     private MonitorConfigRepositoryInterface $monitorConfigRepository;
     private MonitorOverdueHistoryRepositoryInterface $overdueHistoryRepository;
     private NotificationChannelRepositoryInterface $notificationChannelRepository;
+    private PingRepositoryInterface $pingRepository;
     private \Doctrine\ORM\EntityManagerInterface $entityManager;
+    private MonitorSchedulerService $schedulerService;
 
     public function __construct(Environment $twig, Application $app, $container)
     {
@@ -36,7 +41,9 @@ class ConfigController
         $this->monitorConfigRepository = $container->get(MonitorConfigRepositoryInterface::class);
         $this->overdueHistoryRepository = $container->get(MonitorOverdueHistoryRepositoryInterface::class);
         $this->notificationChannelRepository = $container->get(NotificationChannelRepositoryInterface::class);
+        $this->pingRepository = $container->get(PingRepositoryInterface::class);
         $this->entityManager = $container->get(\Doctrine\ORM\EntityManagerInterface::class);
+        $this->schedulerService = $container->get(MonitorSchedulerService::class);
     }
 
     public function editMonitorConfig(Request $request, int $id): Response
@@ -49,18 +56,44 @@ class ConfigController
         // Get or create config
         $config = $this->monitorConfigRepository->getOrCreate($monitor);
 
+        // Pobierz ostatni ping, aby sprawdzić czy ma cron_schedule
+        $lastPings = $this->pingRepository->findRecentByMonitor($monitor->getId(), 1);
+        $lastPing = !empty($lastPings) ? $lastPings[0] : null;
+        $cronSchedule = ($lastPing && $lastPing->getCronSchedule()) ? $lastPing->getCronSchedule() : null;
+
         if ($request->isMethod('POST')) {
             // Dodaj debugowanie
             error_log('POST data: ' . print_r($request->request->all(), true));
 
-            // Update config - użyj get z domyślną wartością, ale już nie przekazuj domyślnej wartości do setterów
-            $expectedInterval = (int)$request->request->get('expected_interval', MonitorConfig::DEFAULT_EXPECTED_INTERVAL);
+            // Pobierz cron_expression z formularza
+            $cronExpression = $request->request->get('cron_expression');
+
+            // Jeśli przesłano cron_expression, zapisz go do konfiguracji
+            if (!empty($cronExpression)) {
+                $config->setCronExpression($cronExpression);
+
+                // Oblicz expectedInterval na podstawie wyrażenia cron
+                $expectedInterval = CronIntervalCalculator::calculateExpectedInterval($cronExpression);
+                $config->setExpectedInterval($expectedInterval);
+            } else {
+                // Jeśli nie przesłano cron_expression, spróbuj użyć tej z ostatniego pinga
+                if ($cronSchedule) {
+                    $config->setCronExpression($cronSchedule);
+
+                    // Oblicz expectedInterval na podstawie wyrażenia cron z pinga
+                    $expectedInterval = CronIntervalCalculator::calculateExpectedInterval($cronSchedule);
+                    $config->setExpectedInterval($expectedInterval);
+                } else {
+                    // Jeśli nie ma cron_schedule w pingu, użyj wartości z formularza
+                    $expectedInterval = (int)$request->request->get('expected_interval', MonitorConfig::DEFAULT_EXPECTED_INTERVAL);
+                    $config->setExpectedInterval($expectedInterval);
+                }
+            }
+
+            // Ustaw alert_threshold z formularza
             $alertThreshold = (int)$request->request->get('alert_threshold', MonitorConfig::DEFAULT_ALERT_THRESHOLD);
-
-            error_log("Setting expected_interval: $expectedInterval, alert_threshold: $alertThreshold");
-
-            $config->setExpectedInterval($expectedInterval);
             $config->setAlertThreshold($alertThreshold);
+
             $this->monitorConfigRepository->save($config);
 
             // Update monitor project
@@ -71,9 +104,20 @@ class ConfigController
             return new RedirectResponse($this->app->generateUrl('monitor_show', ['id' => $monitor->getId()]));
         }
 
+        // Jeśli mamy cron_schedule, ale nie mamy cron_expression, ustaw domyślnie
+        if ($cronSchedule && empty($config->getCronExpression())) {
+            $config->setCronExpression($cronSchedule);
+        }
+
+        // Użyj MonitorSchedulerService do pobrania czytelnego interwału
+        $readableInterval = $this->schedulerService->getReadableSchedule($monitor);
+
         return new Response($this->twig->render('config/monitor_config.html.twig', [
             'monitor' => $monitor,
-            'config' => $config
+            'config' => $config,
+            'lastPing' => $lastPing,
+            'cronSchedule' => $cronSchedule,
+            'readableInterval' => $readableInterval
         ]));
     }
 
@@ -172,7 +216,7 @@ class ConfigController
             // Update config based on channel type
             switch ($type) {
                 case 'file':
-                    $config['filename'] = $request->request->get('filename', './data/log-adapter.log');
+                    $newConfig['filename'] = $request->request->get('filename', './data/log-adapter.log');
                     break;
                 case 'slack':
                     $newConfig['webhook_url'] = $request->request->get('webhook_url');

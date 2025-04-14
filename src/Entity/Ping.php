@@ -50,6 +50,15 @@ class Ping
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $error = null;
 
+    #[ORM\Column(type: Types::STRING, length: 100, nullable: true)]
+    private ?string $timezone = null;
+
+    #[ORM\Column(type: Types::STRING, length: 50, nullable: true)]
+    private ?string $run_source = null;
+
+    #[ORM\Column(type: Types::STRING, length: 100, nullable: true)]
+    private ?string $cron_schedule = null;
+
     #[ORM\ManyToMany(targetEntity: Tag::class, inversedBy: 'pings')]
     #[ORM\JoinTable(name: 'ping_tags')]
     #[ORM\JoinColumn(name: 'ping_id', referencedColumnName: 'id')]
@@ -209,6 +218,39 @@ class Ping
     public function removeTag(Tag $tag): self
     {
         $this->tags->removeElement($tag);
+        return $this;
+    }
+
+    public function getTimezone(): ?string
+    {
+        return $this->timezone;
+    }
+
+    public function setTimezone(?string $timezone): self
+    {
+        $this->timezone = $timezone;
+        return $this;
+    }
+
+    public function getRunSource(): ?string
+    {
+        return $this->run_source;
+    }
+
+    public function setRunSource(?string $run_source): self
+    {
+        $this->run_source = $run_source;
+        return $this;
+    }
+
+    public function getCronSchedule(): ?string
+    {
+        return $this->cron_schedule;
+    }
+
+    public function setCronSchedule(?string $cron_schedule): self
+    {
+        $this->cron_schedule = $cron_schedule;
         return $this;
     }
 

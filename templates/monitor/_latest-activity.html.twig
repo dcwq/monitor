@@ -1,34 +1,49 @@
 <div class="table-responsive">
     <table class="table table-hover mb-0">
         <thead>
-            <tr>
-                <th>Event</th>
-                <th>Host</th>
-                <th>Performance</th>
-                <th>State</th>
-            </tr>
+        <tr>
+            <th>Event</th>
+            <th>Host</th>
+            <th>Performance</th>
+            <th>Source</th>
+            <th>State</th>
+        </tr>
         </thead>
         <tbody>
-            {% for ping in pings %}
+        {% for ping in pings %}
             <tr>
                 <td>
                     <div class="d-flex align-items-center">
                         <i class="bi bi-arrow-repeat text-secondary me-2"></i>
                         <div>
                             <div>Execution</div>
-                            <div class="text-muted small">{{ ping.getFormattedTimestamp() }} UTC</div>
+                            <div class="text-muted small">
+                                {{ ping.getFormattedTimestamp() }}
+                                {% if ping.timezone %}
+                                    ({{ ping.timezone }})
+                                {% else %}
+                                    UTC
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </td>
                 <td>{{ ping.host }}</td>
                 <td>{{ ping.duration ? ping.duration|round(0) ~ ' ms' : '-' }}</td>
                 <td>
+                    {% if ping.runSource %}
+                        <span class="badge bg-info">{{ ping.runSource }}</span>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
                     <span class="badge {{ ping.state == 'complete' ? 'bg-success' : (ping.state == 'run' ? 'bg-primary' : 'bg-danger') }}">
                         {{ ping.state|capitalize }}
                     </span>
                 </td>
             </tr>
-            {% endfor %}
+        {% endfor %}
         </tbody>
     </table>
 </div>

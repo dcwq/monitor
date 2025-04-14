@@ -22,7 +22,9 @@ use App\Repository\NotificationHistoryRepositoryInterface;
 use App\Repository\PingRepositoryInterface;
 use App\Repository\TagRepositoryInterface;
 use App\Services\ApiLogParser;
+use App\Services\CronIntervalCalculator;
 use App\Services\LogParser;
+use App\Services\MonitorSchedulerService;
 use App\Services\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -80,10 +82,16 @@ $container->set(NotificationChannelRepositoryInterface::class, fn() => new Doctr
 $container->set(NotificationHistoryRepositoryInterface::class, fn() => new DoctrineNotificationHistoryRepository($managerRegistry));
 $container->set(MonitorNotificationRepositoryInterface::class, fn() => new DoctrineMonitorNotificationRepository($managerRegistry));
 $container->set(MonitorGroupRepositoryInterface::class, fn() => new DoctrineMonitorGroupRepository($managerRegistry));
-$container->set(MonitorNotificationRepositoryInterface::class, fn() => new DoctrineMonitorNotificationRepository($managerRegistry));
-$container->set(MonitorGroupRepositoryInterface::class, fn() => new DoctrineMonitorGroupRepository($managerRegistry));
 $container->set(GroupNotificationRepositoryInterface::class, fn() => new DoctrineGroupNotificationRepository($managerRegistry));
 $container->set(EntityManagerInterface::class, fn() => $entityManager);
+
+// Rejestracja nowego serwisu MonitorSchedulerService
+$container->set(MonitorSchedulerService::class, function () use ($container) {
+    return new MonitorSchedulerService(
+        $container->get(MonitorConfigRepositoryInterface::class),
+        $container->get(PingRepositoryInterface::class)
+    );
+});
 
 $container->set(NotificationService::class, function () use ($container) {
     return new NotificationService(

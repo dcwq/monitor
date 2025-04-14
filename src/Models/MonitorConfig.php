@@ -1,111 +1,92 @@
 <?php
-// src/Models/MonitorConfig.php
 
-namespace App\Models;
+namespace App\Entity;
 
-use App\Connection;
-use PDO;
+use App\Repository\DoctrineMonitorConfigRepository;
+use Doctrine\DBAL\Types\Types;
+use Doctrine\ORM\Mapping as ORM;
 
+#[ORM\Entity(repositoryClass: DoctrineMonitorConfigRepository::class)]
+#[ORM\Table(name: 'monitor_configs')]
 class MonitorConfig
 {
-    public ?int $id = null;
-    public int $monitor_id;
-    public int $expected_interval;
-    public int $alert_threshold;
+    public const DEFAULT_EXPECTED_INTERVAL = 3600; // 1 hour in seconds
+    public const DEFAULT_ALERT_THRESHOLD = 0;      // 0 seconds (immediate)
 
-    public function __construct(int $monitor_id, int $expected_interval = 3600, int $alert_threshold = 0)
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: Types::INTEGER)]
+    private ?int $id = null;
+
+    #[ORM\OneToOne(inversedBy: 'config', targetEntity: Monitor::class)]
+    #[ORM\JoinColumn(name: 'monitor_id', referencedColumnName: 'id', nullable: false, unique: true)]
+    private Monitor $monitor;
+
+    #[ORM\Column(type: Types::INTEGER)]
+    private int $expected_interval;
+
+    #[ORM\Column(type: Types::INTEGER)]
+    private int $alert_threshold;
+
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $cron_expression = null;
+
+    public function getCronExpression(): ?string
     {
-        $this->monitor_id = $monitor_id;
+        return $this->cron_expression;
+    }
+
+    public function setCronExpression(?string $cron_expression): self
+    {
+        $this->cron_expression = $cron_expression;
+        return $this;
+    }
+
+    public function __construct(
+        Monitor $monitor,
+        int $expected_interval = self::DEFAULT_EXPECTED_INTERVAL,
+        int $alert_threshold = self::DEFAULT_ALERT_THRESHOLD
+    ) {
+        $this->monitor = $monitor;
         $this->expected_interval = $expected_interval;
         $this->alert_threshold = $alert_threshold;
     }
 
-    public function save(): bool
+    public function getId(): ?int
     {
-        $db = Connection::getInstance();
-
-        if ($this->id === null) {
-            // Sprawdź czy już istnieje konfiguracja dla tego monitora
-            $checkStmt = $db->prepare('SELECT id FROM monitor_configs WHERE monitor_id = :monitor_id');
-            $checkStmt->execute(['monitor_id' => $this->monitor_id]);
-            $existing = $checkStmt->fetch();
-
-            if ($existing) {
-                $this->id = $existing['id'];
-                $stmt = $db->prepare('
-                    UPDATE monitor_configs 
-                    SET expected_interval = :expected_interval, 
-                        alert_threshold = :alert_threshold 
-                    WHERE id = :id
-                ');
-                return $stmt->execute([
-                    'id' => $this->id,
-                    'expected_interval' => $this->expected_interval,
-                    'alert_threshold' => $this->alert_threshold
-                ]);
-            } else {
-                $stmt = $db->prepare('
-                    INSERT INTO monitor_configs 
-                    (monitor_id, expected_interval, alert_threshold) 
-                    VALUES (:monitor_id, :expected_interval, :alert_threshold)
-                ');
-                $result = $stmt->execute([
-                    'monitor_id' => $this->monitor_id,
-                    'expected_interval' => $this->expected_interval,
-                    'alert_threshold' => $this->alert_threshold
-                ]);
-
-                if ($result) {
-                    $this->id = (int)$db->lastInsertId();
-                }
-                return $result;
-            }
-        } else {
-            $stmt = $db->prepare('
-                UPDATE monitor_configs 
-                SET expected_interval = :expected_interval, 
-                    alert_threshold = :alert_threshold 
-                WHERE id = :id
-            ');
-            return $stmt->execute([
-                'id' => $this->id,
-                'expected_interval' => $this->expected_interval,
-                'alert_threshold' => $this->alert_threshold
-            ]);
-        }
+        return $this->id;
     }
 
-    public static function findByMonitorId(int $monitorId): ?self
+    public function getMonitor(): Monitor
     {
-        $db = Connection::getInstance();
-        $stmt = $db->prepare('
-            SELECT id, monitor_id, expected_interval, alert_threshold 
-            FROM monitor_configs 
-            WHERE monitor_id = :monitor_id
-        ');
-        $stmt->execute(['monitor_id' => $monitorId]);
-        $data = $stmt->fetch();
-
-        if (!$data) {
-            return null;
-        }
-
-        $config = new self(
-            (int)$data['monitor_id'],
-            (int)$data['expected_interval'],
-            (int)$data['alert_threshold']
-        );
-        $config->id = (int)$data['id'];
-        return $config;
+        return $this->monitor;
     }
 
-    public static function getOrCreate(int $monitorId): self
+    public function setMonitor(Monitor $monitor): self
     {
-        $config = self::findByMonitorId($monitorId);
-        if ($config === null) {
-            $config = new self($monitorId);
-            $config->save();
-        }
-        return $config;
+        $this->monitor = $monitor;
+        return $this;
+    }
+
+    public function getExpectedInterval(): int
+    {
+        return $this->expected_interval;
+    }
+
+    public function setExpectedInterval(int $expected_interval): self
+    {
+        $this->expected_interval = $expected_interval;
+        return $this;
+    }
+
+    public function getAlertThreshold(): int
+    {
+        return $this->alert_threshold;
+    }
+
+    public function setAlertThreshold(int $alert_threshold): self
+    {
+        $this->alert_threshold = $alert_threshold;
+        return $this;
     }
 }

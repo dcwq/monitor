@@ -3,7 +3,7 @@
  * Prosty serwer API dla klonu Cronitor
  *
  * Przyjmuje pingi od klienta Cronitor i zapisuje dane do pliku
- * Wersja 0.2.0 - Dodano obsługę tagów
+ * Wersja 0.3.0 - Dodano obsługę tagów, strefy czasowej, źródła uruchomienia i harmonogramu cron
  */
 
 // Ustawienie domyślnej strefy czasowej dla aplikacji
@@ -13,7 +13,7 @@ date_default_timezone_set('Europe/Warsaw');
 $config = [
     'log_dir' => __DIR__ . '/../../data/logs',
     'history_file' => __DIR__ . '/../../data/logs/cronitor-history.log',
-    'tags_index_file' => __DIR__ . '/../../data/logs/cronitor-tags-index.json', // Nowy plik indeksu tagów
+    'tags_index_file' => __DIR__ . '/../../data/logs/cronitor-tags-index.json', // Plik indeksu tagów
     'enable_auth' => false,
     'api_key' => 'twoj-tajny-klucz-api',
     'allow_origin' => '*', // '*' pozwala na dostęp z dowolnej domeny
@@ -257,8 +257,10 @@ function handlePing() {
 
     // Zapisz do historii
     if (appendToHistory($data)) {
-        // Log success message
+        // Przygotuj komunikat logowania
         $message = "Otrzymano ping '{$data['state']}' dla monitora '{$data['monitor']}'";
+
+        // Dodaj informację o czasie trwania, jeśli dostępna
         if (isset($data['duration'])) {
             $message .= " (czas: {$data['duration']}s)";
         }
@@ -266,6 +268,21 @@ function handlePing() {
         // Dodaj informację o tagach do logu
         if (!empty($data['tags'])) {
             $message .= " [Tagi: " . implode(', ', $data['tags']) . "]";
+        }
+
+        // Dodaj informację o źródle uruchomienia, jeśli dostępna
+        if (isset($data['run_source']) && !empty($data['run_source'])) {
+            $message .= " [Źródło: {$data['run_source']}]";
+        }
+
+        // Dodaj informację o strefie czasowej, jeśli dostępna
+        if (isset($data['timezone']) && !empty($data['timezone'])) {
+            $message .= " [Strefa: {$data['timezone']}]";
+        }
+
+        // Dodaj informację o harmonogramie cron, jeśli dostępna
+        if (isset($data['cron_schedule']) && !empty($data['cron_schedule'])) {
+            $message .= " [Cron: {$data['cron_schedule']}]";
         }
 
         logMessage('INFO', $message);
@@ -277,7 +294,10 @@ function handlePing() {
             'monitor' => $data['monitor'],
             'state' => $data['state'],
             'tags' => $data['tags'],
-            'received_at' => $data['received_at']
+            'received_at' => $data['received_at'],
+            'timezone' => $data['timezone'] ?? null,
+            'run_source' => $data['run_source'] ?? null,
+            'cron_schedule' => $data['cron_schedule'] ?? null
         ]);
     } else {
         // Obsługa błędu zapisu

@@ -111,6 +111,11 @@ class LogParser
         $ping->setIp($pingData['ip'] ?? null);
         $ping->setError($pingData['error'] ?? null);
 
+        // Dodaj nowe pola
+        $ping->setTimezone($pingData['timezone'] ?? null);
+        $ping->setRunSource($pingData['run_source'] ?? null);
+        $ping->setCronSchedule($pingData['cron_schedule'] ?? null);
+
         // Process tags
         if (isset($pingData['tags']) && is_array($pingData['tags'])) {
             foreach ($pingData['tags'] as $tagName) {

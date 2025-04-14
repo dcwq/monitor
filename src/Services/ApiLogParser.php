@@ -49,13 +49,17 @@ class ApiLogParser
 
         while (($line = fgets($fileHandle)) !== false) {
             $matches = [];
-            // Match: [2025-04-12 19:55:13] [INFO] Otrzymano ping 'run' dla monitora 'ping-dc3307' (czas: 0s)
-            if (preg_match('/^\[(.*?)\] \[INFO\] Otrzymano ping \'(.*?)\' dla monitora \'(.*?)\'.*?\(czas: ([\d\.]+)s\)(?:\s+\[Tagi: (.*?)\])?$/', $line, $matches)) {
+            // Zaktualizuj wyrażenie regularne, aby dopasować nowe informacje w logu
+            // Obsługuje teraz: [Źródło: xxx] [Strefa: xxx] [Cron: xxx]
+            if (preg_match('/^\[(.*?)\] \[INFO\] Otrzymano ping \'(.*?)\' dla monitora \'(.*?)\'.*?\(czas: ([\d\.]+)s\)(?:\s+\[Tagi: (.*?)\])?(?:\s+\[Źródło: (.*?)\])?(?:\s+\[Strefa: (.*?)\])?(?:\s+\[Cron: (.*?)\])?$/', $line, $matches)) {
                 $timestamp = $matches[1];
                 $state = $matches[2];
                 $monitorName = $matches[3];
                 $duration = floatval($matches[4]);
                 $tagsStr = isset($matches[5]) ? $matches[5] : '';
+                $runSource = isset($matches[6]) ? $matches[6] : null;
+                $timezone = isset($matches[7]) ? $matches[7] : null;
+                $cronSchedule = isset($matches[8]) ? $matches[8] : null;
 
                 if ($incrementally && $this->lastProcessedLine !== null && $timestamp <= $this->lastProcessedLine) {
                     continue;
@@ -67,7 +71,7 @@ class ApiLogParser
                 }
 
                 try {
-                    $this->processPing($timestamp, $state, $monitorName, $duration, $tagNames);
+                    $this->processPing($timestamp, $state, $monitorName, $duration, $tagNames, $runSource, $timezone, $cronSchedule);
                     $importCount++;
                     $this->lastProcessedLine = $timestamp;
                 } catch (\Exception $e) {
@@ -87,8 +91,16 @@ class ApiLogParser
         return $importCount;
     }
 
-    private function processPing(string $timestamp, string $state, string $monitorName, float $duration, array $tagNames = []): void
-    {
+    private function processPing(
+        string $timestamp,
+        string $state,
+        string $monitorName,
+        float $duration,
+        array $tagNames = [],
+        ?string $runSource = null,
+        ?string $timezone = null,
+        ?string $cronSchedule = null
+    ): void {
         // Find or create monitor
         $monitor = $this->monitorRepository->findByName($monitorName);
         if ($monitor === null) {
@@ -112,6 +124,11 @@ class ApiLogParser
         $ping->setTimestamp(strtotime($timestamp));
         $ping->setReceivedAt(strtotime($timestamp));
         $ping->setIp('127.0.0.1');
+
+        // Ustawienie nowych pól
+        $ping->setRunSource($runSource);
+        $ping->setTimezone($timezone);
+        $ping->setCronSchedule($cronSchedule);
 
         // Process tags
         foreach ($tagNames as $tagName) {

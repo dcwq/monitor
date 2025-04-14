@@ -4,9 +4,11 @@ namespace App\Controllers;
 
 use App\Application;
 use App\Enum\PingState;
+use App\Repository\MonitorConfigRepositoryInterface;
 use App\Repository\MonitorGroupRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
 use App\Repository\PingRepositoryInterface;
+use App\Services\MonitorSchedulerService;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,12 +16,14 @@ use Twig\Environment;
 
 class MonitorController
 {
-    private $container;
     private Environment $twig;
     private Application $app;
+    private $container;
     private MonitorRepositoryInterface $monitorRepository;
     private PingRepositoryInterface $pingRepository;
     private MonitorGroupRepositoryInterface $groupRepository;
+    private MonitorConfigRepositoryInterface $monitorConfigRepository;
+    private MonitorSchedulerService $schedulerService;
 
     public function __construct(Environment $twig, Application $app, $container)
     {
@@ -29,6 +33,8 @@ class MonitorController
         $this->monitorRepository = $container->get(MonitorRepositoryInterface::class);
         $this->pingRepository = $container->get(PingRepositoryInterface::class);
         $this->groupRepository = $container->get(MonitorGroupRepositoryInterface::class);
+        $this->monitorConfigRepository = $container->get(MonitorConfigRepositoryInterface::class);
+        $this->schedulerService = $container->get(MonitorSchedulerService::class);
     }
 
 
@@ -41,9 +47,19 @@ class MonitorController
         // Get all available groups for dropdown
         $groups = $this->groupRepository->findAll();
 
+        // Get configuration
+        $config = $this->monitorConfigRepository->findByMonitor($monitor);
+
         if ($request->isMethod('POST')) {
             $monitor->setName($request->request->get('name'));
             $monitor->setProjectName($request->request->get('project_name'));
+
+            // Handle cron expression
+            $cronExpression = $request->request->get('cron_expression');
+            if ($config && !empty($cronExpression)) {
+                $config->setCronExpression($cronExpression);
+                $this->monitorConfigRepository->save($config);
+            }
 
             // Handle group assignment
             $groupId = $request->request->get('group_id');
@@ -60,7 +76,8 @@ class MonitorController
 
         return new Response($this->twig->render('monitor/edit.html.twig', [
             'monitor' => $monitor,
-            'groups' => $groups
+            'groups' => $groups,
+            'config' => $config
         ]));
     }
 
@@ -76,6 +93,15 @@ class MonitorController
         $stats = $this->pingRepository->getMonitorStats($monitor->getId(), $days);
 
         $completedPings = $this->pingRepository->findRecentByMonitor($monitor->getId(), 50, PingState::COMPLETE->value);
+
+        // Użyj MonitorSchedulerService do pobrania informacji o harmonogramie
+        $cronSchedule = $this->schedulerService->getCronExpression($monitor);
+        $readableInterval = $this->schedulerService->getReadableSchedule($monitor);
+        $expectedNextRun = $this->schedulerService->getExpectedNextRun($monitor);
+
+        // Pobierz źródło uruchomienia z ostatniego pinga
+        $lastPing = $monitor->getLastPing();
+        $runSource = $lastPing ? $lastPing->getRunSource() : null;
 
         $executionTimes = [];
         foreach ($stats['time_data'] as $timePoint) {
@@ -106,7 +132,11 @@ class MonitorController
             'executionTimes' => $executionTimes,
             'events' => array_values($events),
             'days' => $days,
-            'completedPings' => $completedPings
+            'completedPings' => $completedPings,
+            'cronSchedule' => $cronSchedule,
+            'readableInterval' => $readableInterval,
+            'expectedNextRun' => $expectedNextRun,
+            'runSource' => $runSource
         ]));
     }
 

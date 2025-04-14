@@ -6,123 +6,133 @@
 {% block content %}
     <p class="text-muted small">{{ totalMonitors }} monitors</p>
 
-{% if tags|length > 0 %}
-<div class="row mb-0">
-    <div class="col-md-6">
-        <h1 class="h4 mb-0">Tags</h1>
-    </div>
-</div>
-
-<div class="mb-4">
-    <div class="d-flex flex-wrap">
-        <a href="{{ app_url }}/" class="btn btn-sm me-2 mb-2 {% if selectedTag is empty %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-            All Tags
-        </a>
-        {% for tag in tags %}
-        <a href="{{ app_url }}/?tag={{ tag.name }}" class="btn btn-sm me-2 mb-2 {% if selectedTag == tag.name %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-            {{ tag.name }}
-        </a>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-{% if projectNames|length > 0 %}
-    <div class="row mb-0">
-        <div class="col-md-6">
-            <h1 class="h4 mb-0">Projects</h1>
-        </div>
-    </div>
-    <div class="mb-4">
-    <div class="d-flex flex-wrap">
-
-        <a href="{{ app_url }}/" class="btn btn-sm me-2 mb-2 {{ not selectedProject ? 'btn-primary' : 'btn-outline-secondary' }}">All</a>
-        {% for projectName in projectNames %}
-            <a href="{{ app_url }}/?project={{ projectName }}" class="btn btn-sm me-2 mb-2 {{ selectedProject == projectName ? 'btn-primary' : 'btn-outline-secondary' }}">{{ projectName }}</a>
-        {% endfor %}
-    </div>
-    </div>
-{% endif %}
-
-{% if groups|length > 0 %}
-    <div class="row mb-0">
-        <div class="col-md-6">
-            <h1 class="h4 mb-0">Groups</h1>
-        </div>
-    </div>
-    <div class="mb-4">
-        <div class="d-flex flex-wrap">
-            <a href="{{ app_url }}/" class="btn btn-sm me-2 mb-2 {{ not selectedGroup ? 'btn-primary' : 'btn-outline-secondary' }}">All</a>
-            {% for group in groups %}
-                <a href="{{ app_url }}/?group={{ group.id }}" class="btn btn-sm me-2 mb-2 {{ selectedGroup == group.id ? 'btn-primary' : 'btn-outline-secondary' }}">{{ group.name }}</a>
-            {% endfor %}
-        </div>
-    </div>
-{% endif %}
-
-<div class="row">
-    {% for monitorId, stats in monitors %}
-    {% set monitor = stats.monitor %}
-    {% set lastPing = stats.lastPing %}
-
-    <div class="col-md-6 col-lg-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">{{ monitor.name }}</h5>
-                <span class="badge bg-light text-dark">Job</span>
+    {% if tags|length > 0 %}
+        <div class="row mb-0">
+            <div class="col-md-6">
+                <h1 class="h4 mb-0">Tags</h1>
             </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-6">
-                        <span class="d-block text-muted small">Duration</span>
-                        {% if lastPing and lastPing.duration %}
-                        <span class="fw-medium">{{ lastPing.duration|round(0) }} ms</span>
+        </div>
+
+        <div class="mb-4">
+            <div class="d-flex flex-wrap">
+                <a href="{{ app_url }}/" class="btn btn-sm me-2 mb-2 {% if selectedTag is empty %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    All Tags
+                </a>
+                {% for tag in tags %}
+                    <a href="{{ app_url }}/?tag={{ tag.name }}" class="btn btn-sm me-2 mb-2 {% if selectedTag == tag.name %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        {{ tag.name }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if projectNames|length > 0 %}
+        <div class="row mb-0">
+            <div class="col-md-6">
+                <h1 class="h4 mb-0">Projects</h1>
+            </div>
+        </div>
+        <div class="mb-4">
+            <div class="d-flex flex-wrap">
+
+                <a href="{{ app_url }}/" class="btn btn-sm me-2 mb-2 {{ not selectedProject ? 'btn-primary' : 'btn-outline-secondary' }}">All</a>
+                {% for projectName in projectNames %}
+                    <a href="{{ app_url }}/?project={{ projectName }}" class="btn btn-sm me-2 mb-2 {{ selectedProject == projectName ? 'btn-primary' : 'btn-outline-secondary' }}">{{ projectName }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if groups|length > 0 %}
+        <div class="row mb-0">
+            <div class="col-md-6">
+                <h1 class="h4 mb-0">Groups</h1>
+            </div>
+        </div>
+        <div class="mb-4">
+            <div class="d-flex flex-wrap">
+                <a href="{{ app_url }}/" class="btn btn-sm me-2 mb-2 {{ not selectedGroup ? 'btn-primary' : 'btn-outline-secondary' }}">All</a>
+                {% for group in groups %}
+                    <a href="{{ app_url }}/?group={{ group.id }}" class="btn btn-sm me-2 mb-2 {{ selectedGroup == group.id ? 'btn-primary' : 'btn-outline-secondary' }}">{{ group.name }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="row">
+        {% for monitorId, stats in monitors %}
+            {% set monitor = stats.monitor %}
+            {% set lastPing = stats.lastPing %}
+
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{{ monitor.name }}</h5>
+                        {% if lastPing and lastPing.runSource %}
+                            <span class="badge bg-info">{{ lastPing.runSource }}</span>
                         {% else %}
-                        <span class="fw-medium">-</span>
+                            <span class="badge bg-light text-dark">Job</span>
                         {% endif %}
                     </div>
-                    <div class="col-6">
-                        <span class="d-block text-muted small">Expected</span>
-                        <span class="fw-medium">{{ stats.expectedNextRun ?: 'Unknown' }}</span>
-                    </div>
-                </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <span class="d-block text-muted small">Duration</span>
+                                {% if lastPing and lastPing.duration %}
+                                    <span class="fw-medium">{{ lastPing.duration|round(0) }} ms</span>
+                                {% else %}
+                                    <span class="fw-medium">-</span>
+                                {% endif %}
+                            </div>
+                            <div class="col-6">
+                                <span class="d-block text-muted small">Schedule</span>
+                                <span class="fw-medium">
+                            {% if stats.readableSchedule %}
+                                {{ stats.readableSchedule }}
+                            {% else %}
+                                Unknown
+                            {% endif %}
+                        </span>
+                            </div>
+                        </div>
 
-                <div class="row mb-3">
-                    <div class="col-6">
-                        <span class="d-block text-muted small">Last Event</span>
-                        {% if lastPing %}
-                        <span class="fw-medium">{{ lastPing.ago() }}</span>
-                        {% else %}
-                        <span class="fw-medium">-</span>
-                        {% endif %}
-                    </div>
-                    <div class="col-6">
-                        <span class="d-block text-muted small">Last Issue</span>
-                        <span class="fw-medium">{{ stats.lastIssue ?: '-' }}</span>
-                    </div>
-                </div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <span class="d-block text-muted small">Last Event</span>
+                                {% if lastPing %}
+                                    <span class="fw-medium">{{ lastPing.ago() }}</span>
+                                {% else %}
+                                    <span class="fw-medium">-</span>
+                                {% endif %}
+                            </div>
+                            <div class="col-6">
+                                <span class="d-block text-muted small">Next Run</span>
+                                <span class="fw-medium">{{ stats.expectedNextRun ?: 'Unknown' }}</span>
+                            </div>
+                        </div>
 
-                <div class="d-flex mb-2">
-                    <div class="me-3 text-success">{{ stats.healthyCount }} healthy</div>
-                    <div class="me-3 text-danger">{{ stats.failingCount }} failing</div>
-                    <div class="text-secondary">0 paused</div>
-                </div>
+                        <div class="d-flex mb-2">
+                            <div class="me-3 text-success">{{ stats.healthyCount }} healthy</div>
+                            <div class="me-3 text-danger">{{ stats.failingCount }} failing</div>
+                            <div class="text-secondary">0 paused</div>
+                        </div>
 
-                <div class="health-bar">
-                    <div class="health-bar-fill" style="width: {{ stats.healthPercentage }}%"></div>
+                        <div class="health-bar">
+                            <div class="health-bar-fill" style="width: {{ stats.healthPercentage }}%"></div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white border-top-0 text-center">
+                        <a href="{{ url('monitor_show', {'id': monitor.id}) }}" class="btn btn-sm btn-outline-primary w-100">View Details</a>
+                    </div>
                 </div>
             </div>
-            <div class="card-footer bg-white border-top-0 text-center">
-                <a href="{{ url('monitor_show', {'id': monitor.id}) }}" class="btn btn-sm btn-outline-primary w-100">View Details</a>
+        {% else %}
+            <div class="col-12">
+                <div class="alert alert-info">
+                    No monitors found. Sync logs to import monitor data.
+                </div>
             </div>
-        </div>
+        {% endfor %}
     </div>
-    {% else %}
-    <div class="col-12">
-        <div class="alert alert-info">
-            No monitors found. Sync logs to import monitor data.
-        </div>
-    </div>
-    {% endfor %}
-</div>
 {% endblock %}

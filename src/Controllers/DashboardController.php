@@ -10,7 +10,9 @@ use App\Repository\MonitorRepositoryInterface;
 use App\Repository\PingRepositoryInterface;
 use App\Repository\TagRepositoryInterface;
 use App\Services\ApiLogParser;
+use App\Services\CronIntervalCalculator;
 use App\Services\LogParser;
+use App\Services\MonitorSchedulerService;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Twig\Environment;
@@ -23,10 +25,9 @@ class DashboardController
     private MonitorRepositoryInterface $monitorRepository;
     private TagRepositoryInterface $tagRepository;
     private MonitorGroupRepositoryInterface $groupRepository;
-
     private MonitorConfigRepositoryInterface $monitorConfigRepository;
-
     private PingRepositoryInterface $pingRepository;
+    private MonitorSchedulerService $schedulerService;
 
     public function __construct(Environment $twig, Application $app, $container)
     {
@@ -38,6 +39,7 @@ class DashboardController
         $this->groupRepository = $container->get(MonitorGroupRepositoryInterface::class);
         $this->monitorConfigRepository = $container->get(MonitorConfigRepositoryInterface::class);
         $this->pingRepository = $container->get(PingRepositoryInterface::class);
+        $this->schedulerService = $container->get(MonitorSchedulerService::class);
     }
 
     public function index(Request $request): Response {
@@ -88,7 +90,8 @@ class DashboardController
                 'failingCount' => $failingCount,
                 'healthPercentage' => $totalCount > 0 ? ($healthyCount / $totalCount) * 100 : 0,
                 'tags' => $monitorTags,
-                'expectedNextRun' => $this->calculateExpectedNextRun($recentPings->toArray()),
+                'expectedNextRun' => $this->schedulerService->getExpectedNextRun($monitor),
+                'readableSchedule' => $this->schedulerService->getReadableSchedule($monitor),
                 'lastIssue' => $this->getLastIssueInfo($monitor)
             ];
         }
@@ -131,49 +134,6 @@ class DashboardController
         }
 
         return false;
-    }
-
-    private function calculateExpectedNextRun(array $pings): ?string
-    {
-        if (empty($pings)) {
-            return null;
-        }
-
-        // Posortuj pingi malejąco (nowsze pierwsze)
-        usort($pings, function ($a, $b) {
-            return $b->getTimestamp() - $a->getTimestamp();
-        });
-
-        // Weź najświeższy ping
-        $lastPing = $pings[0];
-
-        // Pobierz konfigurację monitora
-        $config = $this->monitorConfigRepository->findByMonitor($lastPing->getMonitor());
-        if (!$config) {
-            return null;
-        }
-
-        // Użyj skonfigurowanego interwału zamiast wyliczania mediany
-        $expectedInterval = $config->getExpectedInterval();
-
-        // Oblicz oczekiwany czas następnego uruchomienia
-        $expectedNext = $lastPing->getTimestamp() + $expectedInterval;
-
-        // Obecny czas
-        $now = time();
-
-        if ($expectedNext < $now) {
-            return 'Overdue';
-        }
-
-        $minutesRemaining = ceil(($expectedNext - $now) / 60);
-
-        if ($minutesRemaining < 60) {
-            return "In about {$minutesRemaining} minute" . ($minutesRemaining === 1 ? '' : 's');
-        }
-
-        $hoursRemaining = ceil($minutesRemaining / 60);
-        return "In about {$hoursRemaining} hour" . ($hoursRemaining === 1 ? '' : 's');
     }
 
     private function getLastIssueInfo(Monitor $monitor): ?string {
