@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Lorisleiva\CronTranslator\CronTranslator;
+
 /**
  * Klasa do obliczania oczekiwanego interwału na podstawie wyrażenia CRON
  */
@@ -151,5 +153,10 @@ class CronIntervalCalculator
             $years = $interval / 31536000;
             return "Co " . ($years == 1 ? "rok" : "{$years} lat");
         }
+    }
+
+    public static function getReadableCronExpression(string $cronExpression): string
+    {
+        return CronTranslator::translate($cronExpression, 'en');
     }
 }

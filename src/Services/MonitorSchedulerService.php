@@ -43,9 +43,7 @@ class MonitorSchedulerService
         }
 
         if ($cronExpression) {
-            // Zwróć czytelny opis wyrażenia cron
-            $interval = CronIntervalCalculator::calculateExpectedInterval($cronExpression);
-            return CronIntervalCalculator::getReadableInterval($interval);
+            return CronIntervalCalculator::getReadableCronExpression($cronExpression);
         }
 
         // Jeśli nie mamy wyrażenia cron, użyj czytelnego opisu interwału
