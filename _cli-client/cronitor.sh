@@ -200,49 +200,88 @@ parse_tags() {
     echo "$tags_json"
 }
 
-# Pomiar czasu wykonania
-measure_execution() {
-    local start_time=$SECONDS
-    local unique_id=$(generate_uuid)
-    local monitor_name="$1"
-    local tags="$2"
-    local project="$3"
-    local cmd="${@:4}"
-    local exit_code
-    local output_file=$(mktemp)
+# Funkcja do sprawdzenia, czy skrypt jest uruchamiany przez crona
+is_running_from_cron() {
+    # Sprawdzamy, czy proces nadrzędny to cron
+    local ppid=$(ps -o ppid= -p $$)
+    local pname=$(ps -o comm= -p "$ppid")
 
-    log "info" "Uruchamianie zadania '$monitor_name' (ID: $unique_id)"
-
-    # Wyślij ping "run"
-    send_ping "$monitor_name" "run" "$unique_id" "0" "0" "" "$tags" "$project" || true
-
-    # Wykonaj polecenie i zapisz kod wyjścia oraz wyjście
-    { $cmd > >(tee -a "$output_file") 2> >(tee -a "$output_file" >&2); }
-    exit_code=$?
-
-    # Oblicz czas trwania
-    local duration=$((SECONDS - start_time))
-
-    log "debug" "Zadanie '$monitor_name' zakończone z kodem: $exit_code (czas: ${duration}s)"
-
-    # Wyślij ping "complete" lub "fail" w zależności od kodu wyjścia
-    if [[ $exit_code -eq 0 ]]; then
-        send_ping "$monitor_name" "complete" "$unique_id" "$duration" "0" "" "$tags" "$project" || true
-        log "info" "Zadanie '$monitor_name' zakończone pomyślnie (czas: ${duration}s)"
-    else
-        # Pobierz pierwsze 1000 znaków z wyjścia jako informację o błędzie
-        local error_snippet=$(head -c 1000 "$output_file")
-        send_ping "$monitor_name" "fail" "$unique_id" "$duration" "$exit_code" "$error_snippet" "$tags" "$project" || true
-        log "error" "Zadanie '$monitor_name' zakończone z błędem (kod: $exit_code, czas: ${duration}s)"
+    if [[ "$pname" == *"cron"* ]]; then
+        return 0  # True, uruchomiony przez crona
     fi
 
-    # Wyczyść plik tymczasowy
-    rm -f "$output_file"
+    # Alternatywna metoda - sprawdzenie, czy TERM jest ustawiony na "dumb" (typowe dla crona)
+    if [[ "$TERM" == "dumb" ]]; then
+        return 0  # True, prawdopodobnie uruchomiony przez crona
+    fi
 
-    return $exit_code
+    # Sprawdź, czy jest to proces, który nie ma żadnego TTY i jego PPID to 1 (systemd)
+    # co może wskazywać na crona sterowanego przez systemd
+    if ! tty -s && [[ "$(ps -o ppid= -p "$ppid" | tr -d ' ')" == "1" ]]; then
+        return 0  # True, prawdopodobnie uruchomiony przez crona
+    fi
+
+    return 1  # False, nie uruchomiony przez crona
 }
 
-# Wysłanie pingu do API
+# Funkcja do określenia zaplanowanego czasu uruchomienia dla zadania cron
+get_scheduled_time() {
+    # Domyślnie zwracamy bieżący czas
+    local current_time=$(date +%s)
+
+    # Jeśli nie jest uruchamiany przez crona, zwracamy bieżący czas
+    if ! is_running_from_cron; then
+        echo "$current_time"
+        return
+    fi
+
+    # Cron uruchamia zadania zazwyczaj o pełnej minucie
+    # Zaokrąglamy czas w dół do początku bieżącej minuty
+    local scheduled_time=$(( current_time - (current_time % 60) ))
+
+    echo "$scheduled_time"
+}
+
+# Funkcja do pobierania aktualnej strefy czasowej
+get_timezone() {
+    # Najpierw próbujemy pobrać strefę z pliku /etc/timezone (Debian/Ubuntu)
+    if [[ -f "/etc/timezone" ]]; then
+        timezone=$(cat /etc/timezone 2>/dev/null)
+        if [[ -n "$timezone" ]]; then
+            echo "$timezone"
+            return 0
+        fi
+    fi
+
+    # Alternatywnie, próbujemy pobrać z pliku /etc/localtime (symboliczne dowiązanie)
+    if [[ -L "/etc/localtime" ]]; then
+        timezone=$(readlink /etc/localtime | sed 's/^.*zoneinfo\///')
+        if [[ -n "$timezone" ]]; then
+            echo "$timezone"
+            return 0
+        fi
+    fi
+
+    # Jeśli powyższe metody zawiodły, używamy polecenia date
+    timezone=$(date +%Z 2>/dev/null)
+    if [[ -n "$timezone" ]]; then
+        # date +%Z zwraca skrót strefy (np. CET)
+        # Spróbujmy uzyskać pełną nazwę strefy czasowej
+        full_tz=$(date +%:z 2>/dev/null)
+        if [[ -n "$full_tz" ]]; then
+            # Format: UTC+HH:MM lub UTC-HH:MM
+            echo "UTC${full_tz}"
+            return 0
+        fi
+        echo "$timezone"
+        return 0
+    fi
+
+    # Ostatecznie, jeśli wszystko zawiedzie, zwracamy "UTC"
+    echo "UTC"
+    return 0
+}
+
 send_ping() {
     local monitor="$1"
     local state="$2"
@@ -252,6 +291,9 @@ send_ping() {
     local error="${6:-}"
     local tags_arg="${7:-}"
     local project="${8:-$DEFAULT_PROJECT}"
+    local run_source="${9:-shell}"
+    local cron_schedule="${10:-}"
+    local timezone="${11:-$(get_timezone)}"
 
     # Nie wysyłaj pingów, jeśli telemetria jest wyłączona
     if [[ "$TELEMETRY_ENABLED" != "true" ]]; then
@@ -274,7 +316,15 @@ send_ping() {
         "exit_code": '$exit_code',
         "host": "'$hostname'",
         "timestamp": '$timestamp',
+        "timezone": "'$timezone'",
+        "run_source": "'$run_source'",
         "tags": '$tags_json
+
+    # Dodaj definicję crona tylko jeśli źródłem jest cron i definicja istnieje
+    if [[ "$run_source" == "cron" && -n "$cron_schedule" ]]; then
+        ping_data="${ping_data}"',
+        "cron_schedule": "'"$cron_schedule"'"'
+    fi
 
     # Dodaj project name, jeśli istnieje
     if [[ -n "$project" ]]; then
@@ -293,7 +343,10 @@ send_ping() {
     # Zamknij JSON
     ping_data="${ping_data}"'}'
 
-    log "debug" "Wysyłanie pingu '$state' dla monitora '$monitor'"
+    log "debug" "Wysyłanie pingu '$state' dla monitora '$monitor' (źródło: $run_source, strefa: $timezone)"
+    if [[ "$run_source" == "cron" && -n "$cron_schedule" ]]; then
+        log "debug" "Definicja crona: $cron_schedule"
+    fi
 
     # Wysłanie pingu do API
     if ! api_request "POST" "$API_PING_ENDPOINT" "$ping_data" &>/dev/null; then
@@ -304,6 +357,233 @@ send_ping() {
     log "debug" "Ping '$state' dla '$monitor' wysłany pomyślnie"
     return 0
 }
+
+# Zmodyfikuj funkcję measure_execution, aby przekazywała strefę czasową
+measure_execution() {
+    local start_time=$SECONDS
+    local unique_id=$(generate_uuid)
+    local monitor_name="$1"
+    local tags="$2"
+    local project="$3"
+    local cmd="${@:4}"
+    local exit_code
+    local output_file=$(mktemp)
+
+    # Wykryj źródło uruchomienia
+    local run_source=$(detect_run_source)
+    log "debug" "Wykryte źródło uruchomienia: $run_source"
+
+    # Jeśli źródłem jest cron, spróbuj pobrać definicję
+    local cron_schedule=""
+    if [[ "$run_source" == "cron" ]]; then
+        cron_schedule=$(get_cron_schedule "$monitor_name")
+        if [[ $? -eq 0 && -n "$cron_schedule" ]]; then
+            log "info" "Wykryto definicję crona: $cron_schedule"
+        else
+            log "debug" "Nie wykryto definicji crona dla monitora: $monitor_name"
+        fi
+    fi
+
+    # Pobierz strefę czasową
+    local timezone=$(get_timezone)
+    log "debug" "Strefa czasowa: $timezone"
+
+    log "info" "Uruchamianie zadania '$monitor_name' (ID: $unique_id, źródło: $run_source)"
+
+    # Wyślij ping "run" z informacją o źródle uruchomienia i strefie czasowej
+    send_ping "$monitor_name" "run" "$unique_id" "0" "0" "" "$tags" "$project" "$run_source" "$cron_schedule" "$timezone" || true
+
+    # Wykonaj polecenie i zapisz kod wyjścia oraz wyjście
+    { $cmd > >(tee -a "$output_file") 2> >(tee -a "$output_file" >&2); }
+    exit_code=$?
+
+    # Oblicz czas trwania
+    local duration=$((SECONDS - start_time))
+
+    log "debug" "Zadanie '$monitor_name' zakończone z kodem: $exit_code (czas: ${duration}s)"
+
+    # Wyślij ping "complete" lub "fail" w zależności od kodu wyjścia
+    if [[ $exit_code -eq 0 ]]; then
+        send_ping "$monitor_name" "complete" "$unique_id" "$duration" "0" "" "$tags" "$project" "$run_source" "$cron_schedule" "$timezone" || true
+        log "info" "Zadanie '$monitor_name' zakończone pomyślnie (czas: ${duration}s)"
+    else
+        # Pobierz pierwsze 1000 znaków z wyjścia jako informację o błędzie
+        local error_snippet=$(head -c 1000 "$output_file")
+        send_ping "$monitor_name" "fail" "$unique_id" "$duration" "$exit_code" "$error_snippet" "$tags" "$project" "$run_source" "$cron_schedule" "$timezone" || true
+        log "error" "Zadanie '$monitor_name' zakończone z błędem (kod: $exit_code, czas: ${duration}s)"
+    fi
+
+    # Wyczyść plik tymczasowy
+    rm -f "$output_file"
+
+    return $exit_code
+}
+
+# Zmodyfikuj również cmd_ping, aby obsługiwało parametr timezone
+cmd_ping() {
+    local monitor_name=""
+    local state=""
+    local message=""
+    local tags=""
+    local project="$DEFAULT_PROJECT"
+    local run_source=""
+    local cron_schedule=""
+    local timezone=""
+
+    # Sprawdź minimum wymaganych argumentów
+    if [[ $# -lt 2 ]]; then
+        log "error" "Brak wymaganych parametrów"
+        echo "Użycie: $0 ping <nazwa_monitora> <stan> [--tags <tagi>] [--project <projekt>] [--run-source <źródło>] [--cron-schedule <definicja>] [--timezone <strefa>] [message]"
+        echo "Stan: run, complete, fail"
+        echo "Źródło: cron, systemd, shell, interactive_shell, ssh, jenkins, docker, ..."
+        return 1
+    fi
+
+    monitor_name="$1"
+    state="$2"
+    shift 2
+
+    # Parsuj pozostałe argumenty
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --tags)
+                tags="$2"
+                shift 2
+                ;;
+            --project)
+                project="$2"
+                shift 2
+                ;;
+            --run-source)
+                run_source="$2"
+                shift 2
+                ;;
+            --cron-schedule)
+                cron_schedule="$2"
+                shift 2
+                ;;
+            --timezone)
+                timezone="$2"
+                shift 2
+                ;;
+            *)
+                # Zakładamy, że wszystko po opcjach to wiadomość
+                message="$*"
+                break
+                ;;
+        esac
+    done
+
+    if [[ ! "$state" =~ ^(run|complete|fail)$ ]]; then
+        log "error" "Nieprawidłowy stan. Dozwolone: run, complete, fail"
+        return 1
+    fi
+
+    # Jeśli nie podano źródła uruchomienia, wykryj je
+    if [[ -z "$run_source" ]]; then
+        run_source=$(detect_run_source)
+        log "debug" "Wykryte źródło uruchomienia: $run_source"
+    fi
+
+    # Jeśli źródłem jest cron i nie podano definicji, spróbuj ją wykryć
+    if [[ "$run_source" == "cron" && -z "$cron_schedule" ]]; then
+        cron_schedule=$(get_cron_schedule "$monitor_name")
+        if [[ $? -eq 0 && -n "$cron_schedule" ]]; then
+            log "debug" "Wykryto definicję crona: $cron_schedule"
+        fi
+    fi
+
+    # Jeśli nie podano strefy czasowej, pobierz aktualną
+    if [[ -z "$timezone" ]]; then
+        timezone=$(get_timezone)
+        log "debug" "Wykryta strefa czasowa: $timezone"
+    fi
+
+    local unique_id=$(generate_uuid)
+
+    if send_ping "$monitor_name" "$state" "$unique_id" "0" "0" "$message" "$tags" "$project" "$run_source" "$cron_schedule" "$timezone"; then
+        log "info" "Ping '$state' dla monitora '$monitor_name' wysłany pomyślnie (źródło: $run_source, strefa: $timezone)"
+        if [[ "$run_source" == "cron" && -n "$cron_schedule" ]]; then
+            log "info" "Definicja crona: $cron_schedule"
+        fi
+        return 0
+    else
+        log "error" "Nie udało się wysłać pingu dla monitora '$monitor_name'"
+        return 1
+    fi
+}
+
+
+# Funkcja do wykrywania źródła uruchomienia
+detect_run_source() {
+    # Sprawdź różne źródła uruchomienia i zwróć odpowiedni identyfikator
+
+    # 1. Sprawdź, czy uruchomiono przez crona
+    if is_running_from_cron; then
+        echo "cron"
+        return 0
+    fi
+
+    # 2. Sprawdź, czy uruchomiono przez systemd
+    if ps -p $PPID -o comm= | grep -q "systemd"; then
+        echo "systemd"
+        return 0
+    fi
+
+    # 3. Sprawdź, czy uruchomiono przez skrypt init.d
+    if ps -p $PPID -o comm= | grep -q "init"; then
+        echo "init"
+        return 0
+    fi
+
+    # 4. Sprawdź, czy uruchomiono przez SSH (np. zdalnie)
+    if ps -p $PPID -o comm= | grep -q "sshd"; then
+        echo "ssh"
+        return 0
+    fi
+
+    # 5. Sprawdź zmienne środowiskowe typowe dla konkretnych środowisk
+    if [[ -n "$JENKINS_HOME" ]]; then
+        echo "jenkins"
+        return 0
+    fi
+
+    if [[ -n "$GITLAB_CI" ]]; then
+        echo "gitlab_ci"
+        return 0
+    fi
+
+    if [[ -n "$GITHUB_ACTIONS" ]]; then
+        echo "github_actions"
+        return 0
+    fi
+
+    if [[ -n "$TRAVIS" ]]; then
+        echo "travis_ci"
+        return 0
+    fi
+
+    if [[ -n "$CIRCLECI" ]]; then
+        echo "circle_ci"
+        return 0
+    fi
+
+    if [[ -n "$DOCKER_CONTAINER" || -f "/.dockerenv" ]]; then
+        echo "docker"
+        return 0
+    fi
+
+    # 6. Sprawdź, czy uruchomiono interaktywnie w terminalu
+    if [[ -t 0 && -t 1 && -t 2 ]]; then
+        echo "interactive_shell"
+        return 0
+    fi
+
+    # 7. Domyślnie zwróć "shell" dla skryptów uruchomionych z powłoki
+    echo "shell"
+    return 0
+}
+
 
 # ========== KOMENDY ==========
 
@@ -380,60 +660,110 @@ cmd_configure() {
     fi
 }
 
-# Komenda: ping
-cmd_ping() {
-    local monitor_name=""
-    local state=""
-    local message=""
-    local tags=""
-    local project="$DEFAULT_PROJECT"
+get_cron_schedule() {
+    local monitor_name="$1"
+    local cron_schedule=""
+    local timezone=$(cat /etc/timezone 2>/dev/null || date +%Z)
 
-    # Sprawdź minimum wymaganych argumentów
-    if [[ $# -lt 2 ]]; then
-        log "error" "Brak wymaganych parametrów"
-        echo "Użycie: $0 ping <nazwa_monitora> <stan> [--tags <tagi>] [--project <projekt>] [message]"
-        echo "Stan: run, complete, fail"
+    # Sprawdź, czy proces jest uruchomiony przez crona
+    if ! is_running_from_cron; then
+        log "debug" "Zadanie nie jest uruchamiane przez crona"
         return 1
     fi
 
-    monitor_name="$1"
-    state="$2"
-    shift 2
+    log "debug" "Wykrywanie definicji zadania cron dla monitora: $monitor_name"
 
-    # Parsuj pozostałe argumenty
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --tags)
-                tags="$2"
-                shift 2
-                ;;
-            --project)
-                project="$2"
-                shift 2
-                ;;
-            *)
-                # Zakładamy, że wszystko po stanie, tagach i projekcie to wiadomość
-                message="$*"
+    # Pobierz PID procesu, który uruchomił ten skrypt
+    local ppid=$(ps -o ppid= -p $$ | tr -d ' ')
+
+    # Ścieżka do tego skryptu
+    local script_path=$(realpath "$0" 2>/dev/null || echo "$0")
+    local script_name=$(basename "$script_path")
+
+    # Spróbuj odczytać crontab bieżącego użytkownika
+    if command -v crontab >/dev/null 2>&1; then
+        local user_crontab=$(crontab -l 2>/dev/null)
+
+        # Szukamy zadania odpowiadającego naszemu skryptowi i monitorowi
+        while IFS= read -r line; do
+            # Pomijamy komentarze i puste linie
+            if [[ "$line" =~ ^[[:space:]]*# || "$line" =~ ^[[:space:]]*$ ]]; then
+                continue
+            fi
+
+            # Sprawdź czy linia zawiera nazwę naszego skryptu i monitora
+            if [[ "$line" == *"$script_name"* && "$line" == *"$monitor_name"* ]]; then
+                # Wyciągnij definicję crona (pierwsze 5 pól lub zapis @coś)
+                if [[ "$line" =~ ^[[:space:]]*([*0-9,-/]+[[:space:]]+[*0-9,-/]+[[:space:]]+[*0-9,-/]+[[:space:]]+[*0-9,-/]+[[:space:]]+[*0-9,-/]+)[[:space:]]+ ]]; then
+                    cron_schedule="${BASH_REMATCH[1]}"
+                elif [[ "$line" =~ ^[[:space:]]*(@[a-z]+)[[:space:]]+ ]]; then
+                    cron_schedule="${BASH_REMATCH[1]}"
+                fi
+
+                # Znaleźliśmy dopasowanie, przerywamy pętlę
                 break
-                ;;
-        esac
-    done
-
-    if [[ ! "$state" =~ ^(run|complete|fail)$ ]]; then
-        log "error" "Nieprawidłowy stan. Dozwolone: run, complete, fail"
-        return 1
+            fi
+        done <<< "$user_crontab"
     fi
 
-    local unique_id=$(generate_uuid)
+    # Jeśli nie znaleźliśmy w crontab użytkownika, spróbuj w systemowych
+    if [[ -z "$cron_schedule" ]]; then
+        local system_crontab_files=("/etc/crontab" "/etc/cron.d/"*)
 
-    if send_ping "$monitor_name" "$state" "$unique_id" "0" "0" "$message" "$tags" "$project"; then
-        log "info" "Ping '$state' dla monitora '$monitor_name' wysłany pomyślnie"
+        for crontab_file in "${system_crontab_files[@]}"; do
+            if [[ -f "$crontab_file" ]]; then
+                while IFS= read -r line; do
+                    # Pomijamy komentarze i puste linie
+                    if [[ "$line" =~ ^[[:space:]]*# || "$line" =~ ^[[:space:]]*$ ]]; then
+                        continue
+                    fi
+
+                    # Sprawdź czy linia zawiera nazwę naszego skryptu i monitora
+                    if [[ "$line" == *"$script_name"* && "$line" == *"$monitor_name"* ]]; then
+                        # Wyciągnij definicję crona (pierwsze 5 pól lub zapis @coś)
+                        if [[ "$line" =~ ^[[:space:]]*([*0-9,-/]+[[:space:]]+[*0-9,-/]+[[:space:]]+[*0-9,-/]+[[:space:]]+[*0-9,-/]+[[:space:]]+[*0-9,-/]+)[[:space:]]+ ]]; then
+                            cron_schedule="${BASH_REMATCH[1]}"
+                        elif [[ "$line" =~ ^[[:space:]]*(@[a-z]+)[[:space:]]+ ]]; then
+                            cron_schedule="${BASH_REMATCH[1]}"
+                        fi
+
+                        # Znaleźliśmy dopasowanie, przerywamy pętlę
+                        break
+                    fi
+                done < "$crontab_file"
+
+                # Jeśli znaleźliśmy definicję, przerywamy sprawdzanie kolejnych plików
+                if [[ -n "$cron_schedule" ]]; then
+                    break
+                fi
+            fi
+        done
+    fi
+
+    # Jeśli wciąż nie znaleźliśmy definicji, to może być zadanie w /etc/cron.{hourly,daily,weekly,monthly}
+    if [[ -z "$cron_schedule" ]]; then
+        # Sprawdź czy skrypt znajduje się w jednym z katalogów cron.*
+        if [[ "$script_path" == "/etc/cron.hourly/"* ]]; then
+            cron_schedule="@hourly"
+        elif [[ "$script_path" == "/etc/cron.daily/"* ]]; then
+            cron_schedule="@daily"
+        elif [[ "$script_path" == "/etc/cron.weekly/"* ]]; then
+            cron_schedule="@weekly"
+        elif [[ "$script_path" == "/etc/cron.monthly/"* ]]; then
+            cron_schedule="@monthly"
+        fi
+    fi
+
+    # Jeśli znaleźliśmy definicję crona, zwróć ją
+    if [[ -n "$cron_schedule" ]]; then
+        echo "$cron_schedule"
         return 0
-    else
-        log "error" "Nie udało się wysłać pingu dla monitora '$monitor_name'"
-        return 1
     fi
+
+    # Nie udało się wykryć definicji
+    return 1
 }
+
 
 # Komenda: run
 cmd_run() {
@@ -489,7 +819,7 @@ cmd_discover() {
     local verbose=false
     local use_name_hash=false
     local default_project="$DEFAULT_PROJECT"
-    local template="CRON_JOB=\"%s\" %s run %s %s"
+    local template="%s %s run %s %s"
     local discovered=0
 
     # Parsowanie opcji

@@ -24,7 +24,7 @@ class NotificationChannel
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $config = null;
 
-    public $config_decoded;
+    public array $config_decoded;
 
     public function getId(): ?int
     {

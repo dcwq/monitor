@@ -112,6 +112,9 @@ class ConfigController
 
             // Build config based on channel type
             switch ($type) {
+                case 'file':
+                    $config['filename'] = $request->request->get('filename', './data/log-adapter.log');
+                    break;
                 case 'slack':
                     $config['webhook_url'] = $request->request->get('webhook_url');
                     $config['username'] = $request->request->get('username', 'Cronitorex');
@@ -168,6 +171,9 @@ class ConfigController
 
             // Update config based on channel type
             switch ($type) {
+                case 'file':
+                    $config['filename'] = $request->request->get('filename', './data/log-adapter.log');
+                    break;
                 case 'slack':
                     $newConfig['webhook_url'] = $request->request->get('webhook_url');
                     $newConfig['username'] = $request->request->get('username', 'Cronitorex');

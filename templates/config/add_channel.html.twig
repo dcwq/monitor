@@ -17,6 +17,7 @@
                 <label for="type">Channel Type:</label>
                 <select id="type" name="type" required class="form-select">
                     <option value="">Select a type</option>
+                    <option value="file">File</option>
                     <option value="slack">Slack</option>
                     <option value="email">Email</option>
                     <option value="sms">SMS</option>
@@ -76,6 +77,14 @@
                 <div class="form-group mb-3">
                     <label for="api_key">API Key:</label>
                     <input type="text" id="api_key" name="api_key" class="form-control">
+                </div>
+            </div>
+
+            {# SMS config fields #}
+            <div id="file-config" class="channel-config" style="display: none;">
+                <div class="form-group mb-3">
+                    <label for="filename">Path:</label>
+                    <input type="text" id="filename" name="filename" class="form-control">
                 </div>
             </div>
 

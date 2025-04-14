@@ -3,6 +3,8 @@
 
 namespace App\Notifications;
 
+use Monolog\Logger;
+
 class NotificationAdapterFactory
 {
     /**
@@ -19,6 +21,9 @@ class NotificationAdapterFactory
                 return new SlackAdapter();
             case 'email':
                 return new EmailAdapter();
+            case 'log':
+                $logger = new Logger('notification');
+                return new LogAdapter($logger);
             case 'sms':
                 return new SmsAdapter();
             default:

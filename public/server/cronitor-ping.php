@@ -6,6 +6,9 @@
  * Wersja 0.2.0 - Dodano obsługę tagów
  */
 
+// Ustawienie domyślnej strefy czasowej dla aplikacji
+date_default_timezone_set('Europe/Warsaw');
+
 // Konfiguracja
 $config = [
     'log_dir' => __DIR__ . '/../../data/logs',

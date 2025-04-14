@@ -45,6 +45,8 @@
                                 From: {{ channel.config_decoded.from|default }}
                             {% elseif channel.type == 'sms' %}
                                 Phone: {{ channel.config_decoded.phone_number|default }}
+                            {% elseif channel.type == 'file' %}
+                                Path: {{ channel.config_decoded.filename|default }}
                             {% endif %}
                         </td>
                         <td>

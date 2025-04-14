@@ -65,6 +65,11 @@
                     <label for="api_key">API Key:</label>
                     <input type="text" id="api_key" name="api_key" value="{{ config.api_key }}" class="form-control">
                 </div>
+            {% elseif channel.type == 'file' %}
+                <div class="form-group mb-3">
+                    <label for="filename">Path:</label>
+                    <input type="text" id="filename" name="filename" value="{{ config.filename }}" class="form-control">
+                </div>
             {% endif %}
 
             <button type="submit" class="btn btn-primary">Update Channel</button>
