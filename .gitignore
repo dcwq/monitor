@@ -2,6 +2,7 @@
 .idea
 vendor
 data/logs/*
+data/last_processed.txt
 mysql/*
 docker/web/.ssh/*
 !docker/web/.ssh/.gitkeep
