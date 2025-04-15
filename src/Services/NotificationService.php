@@ -9,12 +9,14 @@ use App\Entity\MonitorOverdueHistory;
 use App\Entity\NotificationChannel;
 use App\Entity\NotificationHistory;
 use App\Enum\NotificationEventType;
+use App\Enum\PingState;
 use App\Notifications\NotificationAdapterFactory;
 use App\Repository\GroupNotificationRepositoryInterface;
 use App\Repository\MonitorConfigRepositoryInterface;
 use App\Repository\MonitorOverdueHistoryRepositoryInterface;
 use App\Repository\MonitorRepositoryInterface;
 use App\Repository\NotificationChannelRepositoryInterface;
+use App\Repository\PingRepositoryInterface;
 use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -25,8 +27,8 @@ class NotificationService
     private MonitorConfigRepositoryInterface $monitorConfigRepository;
     private MonitorOverdueHistoryRepositoryInterface $overdueHistoryRepository;
     private NotificationChannelRepositoryInterface $notificationChannelRepository;
-
     private GroupNotificationRepositoryInterface $groupNotificationRepository;
+    private ?PingRepositoryInterface $pingRepository;
 
     public function __construct(
         EntityManagerInterface $entityManager,
@@ -34,7 +36,8 @@ class NotificationService
         MonitorConfigRepositoryInterface $monitorConfigRepository,
         MonitorOverdueHistoryRepositoryInterface $overdueHistoryRepository,
         NotificationChannelRepositoryInterface $notificationChannelRepository,
-        GroupNotificationRepositoryInterface $groupNotificationRepository
+        GroupNotificationRepositoryInterface $groupNotificationRepository,
+        PingRepositoryInterface $pingRepository = null
     ) {
         $this->entityManager = $entityManager;
         $this->monitorRepository = $monitorRepository;
@@ -42,6 +45,7 @@ class NotificationService
         $this->overdueHistoryRepository = $overdueHistoryRepository;
         $this->notificationChannelRepository = $notificationChannelRepository;
         $this->groupNotificationRepository = $groupNotificationRepository;
+        $this->pingRepository = $pingRepository;
     }
 
     /**
@@ -155,8 +159,11 @@ class NotificationService
             // Calculate when we expect the next ping
             $expectedNextTime = $lastPing->getTimestamp() + $config->getExpectedInterval();
 
-            // If expected time has passed and alert threshold time has also passed
-            if ($now > $expectedNextTime + $config->getAlertThreshold()) {
+            // Adjust for grace period
+            $graceTime = $expectedNextTime + $config->getGracePeriod();
+
+            // If expected time + grace period has passed and alert threshold time has also passed
+            if ($now > $graceTime + $config->getAlertThreshold()) {
                 // Check if there's already an unresolved overdue record for this monitor
                 $existingOverdue = $this->overdueHistoryRepository->findUnresolvedByMonitor($monitor);
 
@@ -225,16 +232,6 @@ class NotificationService
                         $message .= " Tags: " . implode(', ', $tagNames) . ".";
                     }
 
-                    // Add tag information if available
-                    $tags = $monitor->getTags();
-                    if (!$tags->isEmpty()) {
-                        $tagNames = [];
-                        foreach ($tags as $tag) {
-                            $tagNames[] = $tag->getName();
-                        }
-                        $message .= " Tags: " . implode(', ', $tagNames) . ".";
-                    }
-
                     $this->sendNotifications($monitor->getId(), NotificationEventType::RESOLVE, $message);
                     $notificationCount++;
                 }
@@ -256,6 +253,20 @@ class NotificationService
         $monitor = $this->monitorRepository->findById($monitorId);
         if (!$monitor) {
             return false;
+        }
+
+        // Sprawdź tolerancję błędów
+        $config = $this->monitorConfigRepository->getOrCreate($monitor);
+        $failureTolerance = $config->getFailureTolerance();
+
+        // Jeśli mamy ustawioną tolerancję, sprawdź liczbę poprzednich błędów
+        if ($failureTolerance > 0 && $this->pingRepository) {
+            $recentFailures = $this->pingRepository->findRecentByMonitor($monitorId, $failureTolerance + 1, PingState::FAIL->value);
+
+            // Jeśli liczba błędów jest mniejsza niż tolerancja, nie wysyłaj powiadomienia
+            if (count($recentFailures) <= $failureTolerance) {
+                return false;
+            }
         }
 
         $message = "Monitor '{$monitor->getName()}' has failed";
@@ -393,5 +404,28 @@ class NotificationService
         }
 
         return $results;
+    }
+
+    /**
+     * Sprawdza, czy wykonanie monitora mieści się w limicie czasu
+     *
+     * @param int $monitorId
+     * @param float $duration
+     * @return bool
+     */
+    public function isDurationWithinLimit(int $monitorId, float $duration): bool
+    {
+        $monitor = $this->monitorRepository->findById($monitorId);
+        if (!$monitor) {
+            return true; // Gdy nie ma monitora, nie możemy sprawdzić limitu
+        }
+
+        $config = $this->monitorConfigRepository->getOrCreate($monitor);
+        $maxDuration = $config->getMaxDuration();
+
+        // Porównujemy w sekundach
+        $durationInSeconds = $duration / 1000;
+
+        return $durationInSeconds <= $maxDuration;
     }
 }

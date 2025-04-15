@@ -50,8 +50,8 @@ class ApiLogParser
         while (($line = fgets($fileHandle)) !== false) {
             $matches = [];
             // Zaktualizuj wyrażenie regularne, aby dopasować nowe informacje w logu
-            // Obsługuje teraz: [Źródło: xxx] [Strefa: xxx] [Cron: xxx]
-            if (preg_match('/^\[(.*?)\] \[INFO\] Otrzymano ping \'(.*?)\' dla monitora \'(.*?)\'.*?\(czas: ([\d\.]+)s\)(?:\s+\[Tagi: (.*?)\])?(?:\s+\[Źródło: (.*?)\])?(?:\s+\[Strefa: (.*?)\])?(?:\s+\[Cron: (.*?)\])?$/', $line, $matches)) {
+            // Obsługuje teraz: [Źródło: xxx] [Strefa: xxx] [Cron: xxx] [ErrorOutput: xxx]
+            if (preg_match('/^\[(.*?)\] \[INFO\] Otrzymano ping \'(.*?)\' dla monitora \'(.*?)\'.*?\(czas: ([\d\.]+)s\)(?:\s+\[Tagi: (.*?)\])?(?:\s+\[Źródło: (.*?)\])?(?:\s+\[Strefa: (.*?)\])?(?:\s+\[Cron: (.*?)\])?(?:\s+\[ErrorOutput: (.*?)\])?$/', $line, $matches)) {
                 $timestamp = $matches[1];
                 $state = $matches[2];
                 $monitorName = $matches[3];
@@ -60,6 +60,7 @@ class ApiLogParser
                 $runSource = isset($matches[6]) ? $matches[6] : null;
                 $timezone = isset($matches[7]) ? $matches[7] : null;
                 $cronSchedule = isset($matches[8]) ? $matches[8] : null;
+                $errorOutput = isset($matches[9]) ? $matches[9] : null;
 
                 if ($incrementally && $this->lastProcessedLine !== null && $timestamp <= $this->lastProcessedLine) {
                     continue;
@@ -71,7 +72,7 @@ class ApiLogParser
                 }
 
                 try {
-                    $this->processPing($timestamp, $state, $monitorName, $duration, $tagNames, $runSource, $timezone, $cronSchedule);
+                    $this->processPing($timestamp, $state, $monitorName, $duration, $tagNames, $runSource, $timezone, $cronSchedule, $errorOutput);
                     $importCount++;
                     $this->lastProcessedLine = $timestamp;
                 } catch (\Exception $e) {
@@ -99,7 +100,8 @@ class ApiLogParser
         array $tagNames = [],
         ?string $runSource = null,
         ?string $timezone = null,
-        ?string $cronSchedule = null
+        ?string $cronSchedule = null,
+        ?string $errorOutput = null
     ): void {
         // Find or create monitor
         $monitor = $this->monitorRepository->findByName($monitorName);
@@ -129,6 +131,11 @@ class ApiLogParser
         $ping->setRunSource($runSource);
         $ping->setTimezone($timezone);
         $ping->setCronSchedule($cronSchedule);
+
+        // Jeśli mamy szczegółowe informacje o błędzie
+        if ($state === PingState::FAIL->value && $errorOutput) {
+            $ping->setErrorOutput($errorOutput);
+        }
 
         // Process tags
         foreach ($tagNames as $tagName) {

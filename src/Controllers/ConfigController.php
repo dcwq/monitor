@@ -94,6 +94,16 @@ class ConfigController
             $alertThreshold = (int)$request->request->get('alert_threshold', MonitorConfig::DEFAULT_ALERT_THRESHOLD);
             $config->setAlertThreshold($alertThreshold);
 
+            // Ustaw nowe pola z formularza
+            $maxDuration = (int)$request->request->get('max_duration', MonitorConfig::DEFAULT_MAX_DURATION);
+            $config->setMaxDuration($maxDuration);
+
+            $failureTolerance = (int)$request->request->get('failure_tolerance', MonitorConfig::DEFAULT_FAILURE_TOLERANCE);
+            $config->setFailureTolerance($failureTolerance);
+
+            $gracePeriod = (int)$request->request->get('grace_period', MonitorConfig::DEFAULT_GRACE_PERIOD);
+            $config->setGracePeriod($gracePeriod);
+
             $this->monitorConfigRepository->save($config);
 
             // Update monitor project

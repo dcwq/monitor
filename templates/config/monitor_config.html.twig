@@ -56,6 +56,28 @@
                 <small class="form-text text-muted">How long after missing a ping should we alert? (0 for immediate)</small>
             </div>
 
+            <h3 class="mt-4 mb-3">Performance Metrics</h3>
+
+            <div class="form-group mb-3">
+                <label for="max_duration">Maximum Duration (seconds):</label>
+                <input type="number" id="max_duration" name="max_duration" value="{{ config.maxDuration }}" min="1" class="form-control">
+                <small class="form-text text-muted">Maximum allowed execution time. Jobs exceeding this will be marked as failing.</small>
+            </div>
+
+            <h3 class="mt-4 mb-3">Failure Settings</h3>
+
+            <div class="form-group mb-3">
+                <label for="failure_tolerance">Failure Tolerance (count):</label>
+                <input type="number" id="failure_tolerance" name="failure_tolerance" value="{{ config.failureTolerance }}" min="0" class="form-control">
+                <small class="form-text text-muted">Number of consecutive failures to allow before alerting (0 for no tolerance)</small>
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="grace_period">Grace Period (seconds):</label>
+                <input type="number" id="grace_period" name="grace_period" value="{{ config.gracePeriod }}" min="0" class="form-control">
+                <small class="form-text text-muted">Time to wait after a job starts before marking it as late (0 for immediate)</small>
+            </div>
+
             <button type="submit" class="btn btn-primary">Save Configuration</button>
             <a href="{{ app_url }}/monitors/{{ monitor.id }}" class="btn btn-secondary">Cancel</a>
         </form>

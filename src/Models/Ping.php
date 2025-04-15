@@ -1,254 +1,350 @@
 <?php
 
-namespace App\Models;
+namespace App\Entity;
 
-use App\Connection;
-use PDO;
+use App\Enum\PingState;
+use App\Repository\DoctrinePingRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\DBAL\Types\Types;
+use Doctrine\ORM\Mapping as ORM;
 
+#[ORM\Entity(repositoryClass: DoctrinePingRepository::class)]
+#[ORM\Table(name: 'pings')]
+#[ORM\HasLifecycleCallbacks]
 class Ping
 {
-    public ?int $id = null;
-    public int $monitor_id;
-    public string $unique_id;
-    public string $state;
-    public ?float $duration = null;
-    public ?int $exit_code = null;
-    public ?string $host = null;
-    public int $timestamp;
-    public int $received_at;
-    public ?string $ip = null;
-    public ?string $error = null;
-    public array $tags = [];
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: Types::INTEGER)]
+    private ?int $id = null;
 
-    public function save(): bool
+    #[ORM\ManyToOne(targetEntity: Monitor::class, inversedBy: 'pings')]
+    #[ORM\JoinColumn(name: 'monitor_id', referencedColumnName: 'id', nullable: false)]
+    private Monitor $monitor;
+
+    #[ORM\Column(type: Types::STRING, length: 255)]
+    private string $unique_id;
+
+    #[ORM\Column(type: Types::STRING, length: 20)]
+    private string $state;
+
+    #[ORM\Column(type: Types::FLOAT, nullable: true)]
+    private ?float $duration = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $exit_code = null;
+
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $host = null;
+
+    #[ORM\Column(type: Types::INTEGER)]
+    private int $timestamp;
+
+    #[ORM\Column(type: Types::INTEGER)]
+    private int $received_at;
+
+    #[ORM\Column(type: Types::STRING, length: 45, nullable: true)]
+    private ?string $ip = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $error = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $error_output = null;
+
+    #[ORM\Column(type: Types::STRING, length: 100, nullable: true)]
+    private ?string $timezone = null;
+
+    #[ORM\Column(type: Types::STRING, length: 50, nullable: true)]
+    private ?string $run_source = null;
+
+    #[ORM\Column(type: Types::STRING, length: 100, nullable: true)]
+    private ?string $cron_schedule = null;
+
+    #[ORM\ManyToMany(targetEntity: Tag::class, inversedBy: 'pings')]
+    #[ORM\JoinTable(name: 'ping_tags')]
+    #[ORM\JoinColumn(name: 'ping_id', referencedColumnName: 'id')]
+    #[ORM\InverseJoinColumn(name: 'tag_id', referencedColumnName: 'id')]
+    private Collection $tags;
+
+    public function __construct()
     {
-        $db = Connection::getInstance();
-
-        // Sprawdź czy to jest nowy ping
-        if ($this->id === null) {
-            $stmt = $db->prepare('
-            INSERT INTO pings (
-                monitor_id, unique_id, state, duration, exit_code, host, 
-                timestamp, received_at, ip, error
-            ) VALUES (
-                :monitor_id, :unique_id, :state, :duration, :exit_code, :host,
-                :timestamp, :received_at, :ip, :error
-            )
-        ');
-
-            $result = $stmt->execute([
-                'monitor_id' => $this->monitor_id,
-                'unique_id' => $this->unique_id,
-                'state' => $this->state,
-                'duration' => $this->duration,
-                'exit_code' => $this->exit_code,
-                'host' => $this->host,
-                'timestamp' => $this->timestamp,
-                'received_at' => $this->received_at,
-                'ip' => $this->ip,
-                'error' => $this->error,
-            ]);
-
-            if ($result) {
-                $this->id = (int)$db->lastInsertId();
-
-                // Obsłuż tagi
-                if (!empty($this->tags)) {
-                    $this->saveTags();
-                }
-
-                // Sprawdź czy trzeba wysłać powiadomienia
-                $this->checkForStateChanges();
-
-                return true;
-            }
-            return false;
-        }
-
-        // Aktualizacja nie jest obsługiwana
-        return false;
+        $this->tags = new ArrayCollection();
+        $this->unique_id = substr(md5(rand()), 0, 8);
+        $this->state = PingState::RUN->value;
+        $this->timestamp = time();
+        $this->received_at = time();
     }
 
-    private function checkForStateChanges(): void
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getMonitor(): Monitor
+    {
+        return $this->monitor;
+    }
+
+    public function setMonitor(Monitor $monitor): self
+    {
+        $this->monitor = $monitor;
+        return $this;
+    }
+
+    public function getUniqueId(): string
+    {
+        return $this->unique_id;
+    }
+
+    public function setUniqueId(string $unique_id): self
+    {
+        $this->unique_id = $unique_id;
+        return $this;
+    }
+
+    public function getState(): string
+    {
+        return $this->state;
+    }
+
+    public function getPingState(): PingState
+    {
+        return PingState::fromString($this->state);
+    }
+
+    public function setState(string|PingState $state): self
+    {
+        if ($state instanceof PingState) {
+            $this->state = $state->value;
+        } else {
+            $this->state = $state;
+        }
+        return $this;
+    }
+
+    public function getDuration(): ?float
+    {
+        return $this->duration;
+    }
+
+    public function setDuration(?float $duration): self
+    {
+        $this->duration = $duration;
+        return $this;
+    }
+
+    public function getExitCode(): ?int
+    {
+        return $this->exit_code;
+    }
+
+    public function setExitCode(?int $exit_code): self
+    {
+        $this->exit_code = $exit_code;
+        return $this;
+    }
+
+    public function getHost(): ?string
+    {
+        return $this->host;
+    }
+
+    public function setHost(?string $host): self
+    {
+        $this->host = $host;
+        return $this;
+    }
+
+    public function getTimestamp(): int
+    {
+        return $this->timestamp;
+    }
+
+    public function setTimestamp(int $timestamp): self
+    {
+        $this->timestamp = $timestamp;
+        return $this;
+    }
+
+    public function getReceivedAt(): int
+    {
+        return $this->received_at;
+    }
+
+    public function setReceivedAt(int $received_at): self
+    {
+        $this->received_at = $received_at;
+        return $this;
+    }
+
+    public function getIp(): ?string
+    {
+        return $this->ip;
+    }
+
+    public function setIp(?string $ip): self
+    {
+        $this->ip = $ip;
+        return $this;
+    }
+
+    public function getError(): ?string
+    {
+        return $this->error;
+    }
+
+    public function setError(?string $error): self
+    {
+        $this->error = $error;
+        return $this;
+    }
+
+    public function getErrorOutput(): ?string
+    {
+        return $this->error_output;
+    }
+
+    public function setErrorOutput(?string $error_output): self
+    {
+        $this->error_output = $error_output;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Tag>
+     */
+    public function getTags(): Collection
+    {
+        return $this->tags;
+    }
+
+    public function addTag(Tag $tag): self
+    {
+        if (!$this->tags->contains($tag)) {
+            $this->tags->add($tag);
+        }
+
+        return $this;
+    }
+
+    public function removeTag(Tag $tag): self
+    {
+        $this->tags->removeElement($tag);
+        return $this;
+    }
+
+    public function getTimezone(): ?string
+    {
+        return $this->timezone;
+    }
+
+    public function setTimezone(?string $timezone): self
+    {
+        $this->timezone = $timezone;
+        return $this;
+    }
+
+    public function getRunSource(): ?string
+    {
+        return $this->run_source;
+    }
+
+    public function setRunSource(?string $run_source): self
+    {
+        $this->run_source = $run_source;
+        return $this;
+    }
+
+    public function getCronSchedule(): ?string
+    {
+        return $this->cron_schedule;
+    }
+
+    public function setCronSchedule(?string $cron_schedule): self
+    {
+        $this->cron_schedule = $cron_schedule;
+        return $this;
+    }
+
+    /**
+     * Check for state changes and trigger notifications if needed
+     *
+     * @ORM\PostPersist
+     */
+    public function checkForStateChanges(): void
     {
         try {
-            // Pobierz poprzedni ping dla tego monitora
-            $previousPings = self::findRecentByMonitor($this->monitor_id, 2);
+            $repository = new DoctrinePingRepository(/* EntityManager will be injected */);
+            $previousPings = $repository->findRecentByMonitor($this->monitor->getId(), 2);
 
-            // Usuń obecny ping z listy (jeśli jest)
+            // Remove current ping from the list (if present)
             $previousPings = array_filter($previousPings, function($ping) {
-                return $ping->id !== $this->id;
+                return $ping->getId() !== $this->id;
             });
 
-            $previousPing = reset($previousPings); // Pobierz pierwszy element (lub false jeśli pusta tablica)
+            $previousPing = reset($previousPings);
 
-            // Jeśli jest to pierwszy ping dla monitora, nie ma potrzeby sprawdzania zmiany stanu
+            // If this is the first ping for the monitor, no need to check for state change
             if (!$previousPing) {
                 return;
             }
 
-            $notificationService = new \App\Services\NotificationService();
+            $notificationService = new \App\Services\NotificationService(/* dependencies will be injected */);
 
-            // Sprawdź, czy wystąpiło zdarzenie niepowodzenia
-            if ($this->state === 'fail' && $previousPing->state !== 'fail') {
-                $notificationService->handleMonitorFail($this->monitor_id, $this->error ?? '');
+            // Check for failure event
+            if ($this->state === PingState::FAIL->value && $previousPing->getState() !== PingState::FAIL->value) {
+                $notificationService->handleMonitorFail($this->monitor->getId(), $this->error ?? '');
             }
 
-            // Sprawdź, czy wystąpiło zdarzenie naprawy
-            if ($this->state === 'complete' && $previousPing->state === 'fail') {
-                $notificationService->handleMonitorResolve($this->monitor_id);
+            // Check for recovery event
+            if ($this->state === PingState::COMPLETE->value && $previousPing->getState() === PingState::FAIL->value) {
+                $notificationService->handleMonitorResolve($this->monitor->getId());
             }
         } catch (\Exception $e) {
-            // Log błędu, ale nie zakłócaj głównego procesu
+            // Log error, but don't disrupt the main process
             error_log("Error checking for state changes: " . $e->getMessage());
         }
     }
-    
-    private function saveTags(): void
+
+    public function getFormattedTimestamp(string $format = 'Y-m-d H:i:s'): string
     {
-        if ($this->id === null) {
-            return;
-        }
-        
-        $db = Connection::getInstance();
-        
-        foreach ($this->tags as $tagName) {
-            $tag = Tag::findByName($tagName);
-            
-            if ($tag === null) {
-                $tag = new Tag($tagName);
-                $tag->save();
-            }
-            
-            $stmt = $db->prepare('
-                INSERT IGNORE INTO ping_tags (ping_id, tag_id)
-                VALUES (:ping_id, :tag_id)
-            ');
-            
-            $stmt->execute([
-                'ping_id' => $this->id,
-                'tag_id' => $tag->id
-            ]);
-        }
+        $date = new \DateTime();
+        $date->setTimestamp($this->timestamp);
+        return $date->format($format);
     }
-    
-    public function getTags(): array
-    {
-        if ($this->id === null) {
-            return [];
-        }
-        
-        $db = Connection::getInstance();
-        
-        $stmt = $db->prepare('
-            SELECT t.*
-            FROM tags t
-            JOIN ping_tags pt ON t.id = pt.tag_id
-            WHERE pt.ping_id = :ping_id
-            ORDER BY t.name
-        ');
-        
-        $stmt->execute(['ping_id' => $this->id]);
-        
-        $tags = [];
-        
-        while ($data = $stmt->fetch()) {
-            $tag = new Tag($data['name']);
-            $tag->id = (int)$data['id'];
-            $tags[] = $tag;
-        }
-        
-        return $tags;
-    }
-    
-    public static function findByMonitorAndUniqueId(int $monitorId, string $uniqueId): array
-    {
-        $db = Connection::getInstance();
-        
-        $stmt = $db->prepare('
-            SELECT *
-            FROM pings
-            WHERE monitor_id = :monitor_id
-              AND unique_id = :unique_id
-            ORDER BY timestamp DESC
-        ');
-        
-        $stmt->execute([
-            'monitor_id' => $monitorId,
-            'unique_id' => $uniqueId
-        ]);
-        
-        $pings = [];
-        
-        while ($data = $stmt->fetch()) {
-            $ping = new self();
-            $ping->id = (int)$data['id'];
-            $ping->monitor_id = (int)$data['monitor_id'];
-            $ping->unique_id = $data['unique_id'];
-            $ping->state = $data['state'];
-            $ping->duration = $data['duration'] !== null ? (float)$data['duration'] : null;
-            $ping->exit_code = $data['exit_code'] !== null ? (int)$data['exit_code'] : null;
-            $ping->host = $data['host'];
-            $ping->timestamp = (int)$data['timestamp'];
-            $ping->received_at = (int)$data['received_at'];
-            $ping->ip = $data['ip'];
-            $ping->error = $data['error'];
-            
-            $pings[] = $ping;
-        }
-        
-        return $pings;
-    }
-    
-    public static function findRecentByMonitor(int $monitorId, int $limit = 10, string $state = null): array
-    {
-        $db = Connection::getInstance();
-        
-        $sql = '
-            SELECT *
-            FROM pings
-            WHERE monitor_id = :monitor_id
-        ';
-        
-        if ($state !== null) {
-            $sql .= ' AND state = :state';
-        }
-        
-        $sql .= '
-            ORDER BY timestamp DESC
-            LIMIT :limit
-        ';
-        
-        $stmt = $db->prepare($sql);
-        
-        $stmt->bindValue(':monitor_id', $monitorId, PDO::PARAM_INT);
-        
-        if ($state !== null) {
-            $stmt->bindValue(':state', $state, PDO::PARAM_STR);
-        }
-        
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        
-        $pings = [];
-        
-        while ($data = $stmt->fetch()) {
-            $ping = new self();
-            $ping->id = (int)$data['id'];
-            $ping->monitor_id = (int)$data['monitor_id'];
-            $ping->unique_id = $data['unique_id'];
-            $ping->state = $data['state'];
-            $ping->duration = $data['duration'] !== null ? (float)$data['duration'] : null;
-            $ping->exit_code = $data['exit_code'] !== null ? (int)$data['exit_code'] : null;
-            $ping->host = $data['host'];
-            $ping->timestamp = (int)$data['timestamp'];
-            $ping->received_at = (int)$data['received_at'];
-            $ping->ip = $data['ip'];
-            $ping->error = $data['error'];
-            
-            $pings[] = $ping;
-        }
-        
-        return $pings;
+
+    public function ago(): string {
+
+        $when = $this->getTimestamp();
+
+        $diff = date("U") - $when;
+
+        // Days
+        $day = floor($diff / 86400);
+        $diff = $diff - ($day * 86400);
+
+        // Hours
+        $hrs = floor($diff / 3600);
+        $diff = $diff - ($hrs * 3600);
+
+        // Mins
+        $min = floor($diff / 60);
+        $diff = $diff - ($min * 60);
+
+        // Secs
+        $sec = $diff;
+
+        // Return how long ago this was. eg: 3d 17h 4m 18s ago
+        // Skips left fields if they aren't necessary, eg: 16h 0m 27s ago / 10m 7s ago
+        $str = sprintf("%s%s%s%s",
+            $day != 0 ? $day."d " : "",
+            ($day != 0 || $hrs != 0) ? $hrs."h " : "",
+            ($day != 0 || $hrs != 0 || $min != 0) ? $min."m " : "",
+            $sec."s ago"
+        );
+
+        return $str;
     }
 }

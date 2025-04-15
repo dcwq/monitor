@@ -93,6 +93,15 @@ class MonitorController
         $stats = $this->pingRepository->getMonitorStats($monitor->getId(), $days);
 
         $completedPings = $this->pingRepository->findRecentByMonitor($monitor->getId(), 50, PingState::COMPLETE->value);
+        $failedPings = $this->pingRepository->findRecentByMonitor($monitor->getId(), 50, PingState::FAIL->value);
+
+        // Połącz pingi complete i fail, aby mieć pełny obraz aktywności
+        $allPings = array_merge($completedPings, $failedPings);
+
+        // Posortuj wszystkie pingi według timestamp desc
+        usort($allPings, function($a, $b) {
+            return $b->getTimestamp() <=> $a->getTimestamp();
+        });
 
         // Użyj MonitorSchedulerService do pobrania informacji o harmonogramie
         $cronSchedule = $this->schedulerService->getCronExpression($monitor);
@@ -113,7 +122,9 @@ class MonitorController
         }
 
         $events = [];
-        foreach ($completedPings as $ping) {
+        foreach ($allPings as $ping) {
+            if ($ping->getState() != PingState::COMPLETE->value) continue;
+
             $date = date('m/d', $ping->getTimestamp());
             if (!isset($events[$date])) {
                 $events[$date] = ['date' => $date, 'executions' => []];
@@ -126,17 +137,24 @@ class MonitorController
             ];
         }
 
+        // Pobierz konfigurację monitora
+        $config = $this->monitorConfigRepository->findByMonitor($monitor);
+        if ($config) {
+            $monitor->setConfig($config);
+        }
+
         return new Response($this->twig->render('monitor/show.html.twig', [
             'monitor' => $monitor,
             'stats' => $stats,
             'executionTimes' => $executionTimes,
             'events' => array_values($events),
             'days' => $days,
-            'completedPings' => $completedPings,
+            'completedPings' => $allPings,
             'cronSchedule' => $cronSchedule,
             'readableInterval' => $readableInterval,
             'expectedNextRun' => $expectedNextRun,
-            'runSource' => $runSource
+            'runSource' => $runSource,
+            'config' => $config
         ]));
     }
 
@@ -177,11 +195,19 @@ class MonitorController
         }
 
         $limit = $request->query->getInt('limit', 10);
+        $page = $request->query->getInt('page', 1);
+        $total = $this->pingRepository->countByMonitor($id, PingState::FAIL->value);
+        $maxPage = ceil($total / $limit);
+
         $pings = $this->pingRepository->findRecentByMonitor($monitor->getId(), $limit, PingState::FAIL->value);
 
         return new Response($this->twig->render('monitor/_latest_issues.html.twig', [
             'monitor' => $monitor,
-            'pings' => $pings
+            'pings' => $pings,
+            'page' => $page,
+            'limit' => $limit,
+            'total' => $total,
+            'maxPage' => $maxPage
         ]));
     }
 }

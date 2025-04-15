@@ -98,6 +98,7 @@ class LogParser
             $this->monitorRepository->save($monitor);
         }
 
+
         // Create ping entity
         $ping = new Ping();
         $ping->setMonitor($monitor);
@@ -110,6 +111,7 @@ class LogParser
         $ping->setReceivedAt($pingData['received_at'] ?? time());
         $ping->setIp($pingData['ip'] ?? null);
         $ping->setError($pingData['error'] ?? null);
+        $ping->setErrorOutput($pingData['error_output'] ?? null);
 
         // Dodaj nowe pola
         $ping->setTimezone($pingData['timezone'] ?? null);
